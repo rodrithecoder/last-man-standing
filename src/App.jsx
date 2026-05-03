@@ -1,6 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-// ─── Storage Keys ─────────────────────────────────────────────────────────────
+// ─── Supabase Client ──────────────────────────────────────────────────────────
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_KEY
+);
+
+// ─── Storage Keys (legacy, kept as constants for migration if needed) ────────
 const SK_BOOKINGS = "rentalpro_bookings_v1";
 const SK_SETTINGS = "rentalpro_settings_v1";
 
@@ -24,19 +31,87 @@ const DEFAULT_SETTINGS = {
   })(),
 };
 
-// ─── Persistence ──────────────────────────────────────────────────────────────
-function load(key, def) {
-  try {
-    const v = localStorage.getItem(key);
-    return v ? JSON.parse(v) : def;
-  } catch {
-    return def;
-  }
+// ─── Supabase Persistence ─────────────────────────────────────────────────────
+// Convert app-shape booking <-> DB-shape booking
+function bookingToDB(b) {
+  return {
+    id: b.id,
+    name: b.name,
+    sales_rep: b.salesRep,
+    start_date: b.startDate,
+    end_date: b.endDate,
+    days: b.days,
+    items: b.items || {},
+    service_type: b.serviceType,
+    address: b.address || "",
+    notes: b.notes || "",
+    discount: b.discount || 0,
+    items_total: b.itemsTotal || 0,
+    delivery_fee: b.deliveryFee || 0,
+    discount_amount: b.discountAmount || 0,
+    total_cost: b.totalCost,
+  };
 }
-function save(key, val) {
-  try {
-    localStorage.setItem(key, JSON.stringify(val));
-  } catch {}
+function bookingFromDB(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    salesRep: r.sales_rep,
+    startDate: r.start_date,
+    endDate: r.end_date,
+    days: r.days,
+    items: r.items || {},
+    serviceType: r.service_type,
+    address: r.address || "",
+    notes: r.notes || "",
+    discount: Number(r.discount) || 0,
+    itemsTotal: Number(r.items_total) || 0,
+    deliveryFee: Number(r.delivery_fee) || 0,
+    discountAmount: Number(r.discount_amount) || 0,
+    totalCost: Number(r.total_cost) || 0,
+  };
+}
+
+async function fetchAllBookings() {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .order("start_date", { ascending: true });
+  if (error) {
+    console.error("fetchAllBookings error:", error);
+    return [];
+  }
+  return (data || []).map(bookingFromDB);
+}
+
+async function upsertBookingDB(b) {
+  const { error } = await supabase.from("bookings").upsert(bookingToDB(b));
+  if (error) console.error("upsertBookingDB error:", error);
+}
+
+async function deleteBookingDB(id) {
+  const { error } = await supabase.from("bookings").delete().eq("id", id);
+  if (error) console.error("deleteBookingDB error:", error);
+}
+
+async function fetchSettings() {
+  const { data, error } = await supabase
+    .from("settings")
+    .select("data")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) {
+    console.error("fetchSettings error:", error);
+    return null;
+  }
+  return data?.data || null;
+}
+
+async function saveSettingsDB(settings) {
+  const { error } = await supabase
+    .from("settings")
+    .upsert({ id: 1, data: settings, updated_at: new Date().toISOString() });
+  if (error) console.error("saveSettingsDB error:", error);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1087,12 +1162,37 @@ export default function App() {
   const width = useWindowWidth();
   const isMobile = width < 640;
 
-  const [bookings, setBookings] = useState(() => load(SK_BOOKINGS, []));
+  const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState(() => {
-    const s = load(SK_SETTINGS, DEFAULT_SETTINGS);
+    const s = { ...DEFAULT_SETTINGS };
     if (!s.items) s.items = DEFAULT_ITEMS;
     return s;
   });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  // Load bookings + settings from Supabase on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [bks, st] = await Promise.all([fetchAllBookings(), fetchSettings()]);
+        if (cancelled) return;
+        setBookings(bks);
+        if (st) {
+          setSettings({ ...st, items: st.items?.length ? st.items : DEFAULT_ITEMS });
+        } else {
+          // First run: persist defaults so other devices see the same setup
+          await saveSettingsDB(DEFAULT_SETTINGS);
+        }
+      } catch (e) {
+        if (!cancelled) setLoadError(e.message || "Failed to load data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const [mobileTab, setMobileTab] = useState("calendar");
   const [desktopTab, setDesktopTab] = useState("calendar");
@@ -1125,13 +1225,18 @@ export default function App() {
 
   const setForm = useCallback((patch) => setFormRaw((p) => ({ ...p, ...patch })), []);
 
-  const saveBookings = useCallback((b) => {
-    setBookings(b);
-    save(SK_BOOKINGS, b);
+  // Persist a single booking change (upsert) or removal.
+  // Caller passes the new full list (for instant UI), plus optional op metadata
+  // so we know what to write to the DB.
+  const saveBookings = useCallback((newList, op) => {
+    setBookings(newList);
+    if (!op) return;
+    if (op.type === "upsert" && op.booking) upsertBookingDB(op.booking);
+    if (op.type === "delete" && op.id) deleteBookingDB(op.id);
   }, []);
   const saveSettings = useCallback((s) => {
     setSettings(s);
-    save(SK_SETTINGS, s);
+    saveSettingsDB(s);
   }, []);
 
   const { items: itemDefs, startDate, endDate } = settings;
@@ -1200,15 +1305,18 @@ export default function App() {
     };
 
     let updated;
+    let savedBooking;
     if (editingBookingId) {
-      updated = bookings.map((b) => (b.id === editingBookingId ? { ...b, ...baseBooking } : b));
+      savedBooking = { ...bookings.find((b) => b.id === editingBookingId), ...baseBooking };
+      updated = bookings.map((b) => (b.id === editingBookingId ? savedBooking : b));
       setSuccessMsg("Booking updated.");
     } else {
-      updated = [...bookings, { id: genId(), ...baseBooking }];
+      savedBooking = { id: genId(), ...baseBooking };
+      updated = [...bookings, savedBooking];
       setSuccessMsg("Booking saved.");
     }
     updated.sort((a, b) => a.startDate.localeCompare(b.startDate));
-    saveBookings(updated);
+    saveBookings(updated, { type: "upsert", booking: savedBooking });
     setFormRaw(EMPTY_FORM);
     setFormErrors({});
     setEditingBookingId(null);
@@ -1250,7 +1358,7 @@ export default function App() {
       danger: true,
       onConfirm: () => {
         if (editingBookingId === b.id) cancelEdit();
-        saveBookings(bookings.filter((x) => x.id !== b.id));
+        saveBookings(bookings.filter((x) => x.id !== b.id), { type: "delete", id: b.id });
         setConfirmState(null);
       },
     });
@@ -1319,6 +1427,38 @@ export default function App() {
     filterStart, setFilterStart, filterEnd, setFilterEnd,
     startEditBooking, requestRemoveBooking, exportCSV,
   };
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: "100vh", background: C.bg, color: C.textSub,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: T.sans, fontSize: 14,
+      }}>
+        Loading bookings…
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{
+        minHeight: "100vh", background: C.bg, color: C.text,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: T.sans, padding: 24, textAlign: "center",
+      }}>
+        <div>
+          <div style={{ color: C.danger, fontWeight: 700, marginBottom: 8 }}>
+            Couldn't load data
+          </div>
+          <div style={{ fontSize: 13, color: C.textSub }}>{loadError}</div>
+          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 12 }}>
+            Check your internet connection and refresh.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isMobile) {
     return (
