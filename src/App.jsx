@@ -29,6 +29,10 @@ const DEFAULT_SETTINGS = {
     d.setDate(0);
     return d.toISOString().split("T")[0];
   })(),
+  investment: 0,
+  startingGeneral: 0,
+  startingChetos: 0,
+  startingRodri: 0,
 };
 
 // ─── Supabase Persistence ─────────────────────────────────────────────────────
@@ -50,6 +54,7 @@ function bookingToDB(b) {
     delivery_fee: b.deliveryFee || 0,
     discount_amount: b.discountAmount || 0,
     total_cost: b.totalCost,
+    status: b.status || "active",
   };
 }
 function bookingFromDB(r) {
@@ -69,6 +74,7 @@ function bookingFromDB(r) {
     deliveryFee: Number(r.delivery_fee) || 0,
     discountAmount: Number(r.discount_amount) || 0,
     totalCost: Number(r.total_cost) || 0,
+    status: r.status || "active",
   };
 }
 
@@ -112,6 +118,118 @@ async function saveSettingsDB(settings) {
     .from("settings")
     .upsert({ id: 1, data: settings, updated_at: new Date().toISOString() });
   if (error) console.error("saveSettingsDB error:", error);
+}
+
+// ─── Payments / Settlements DB ────────────────────────────────────────────────
+async function fetchAllPayments() {
+  const { data, error } = await supabase
+    .from("payments")
+    .select("*")
+    .order("collected_at", { ascending: true });
+  if (error) {
+    console.error("fetchAllPayments error:", error);
+    return [];
+  }
+  return (data || []).map((r) => ({
+    id: r.id,
+    bookingId: r.booking_id,
+    amount: Number(r.amount) || 0,
+    collectedBy: r.collected_by,
+    collectedAt: r.collected_at,
+    note: r.note || "",
+  }));
+}
+
+async function addPaymentDB(p) {
+  const { error } = await supabase.from("payments").insert({
+    id: p.id,
+    booking_id: p.bookingId,
+    amount: p.amount,
+    collected_by: p.collectedBy,
+    collected_at: p.collectedAt,
+    note: p.note || "",
+  });
+  if (error) console.error("addPaymentDB error:", error);
+}
+
+async function setBookingStatusDB(id, status) {
+  const { error } = await supabase
+    .from("bookings")
+    .update({ status })
+    .eq("id", id);
+  if (error) console.error("setBookingStatusDB error:", error);
+}
+
+async function fetchAllSettlements() {
+  const { data, error } = await supabase
+    .from("settlements")
+    .select("*")
+    .order("settled_at", { ascending: false });
+  if (error) {
+    console.error("fetchAllSettlements error:", error);
+    return [];
+  }
+  return (data || []).map((r) => ({
+    id: r.id,
+    settledAt: r.settled_at,
+    chetosAmount: Number(r.chetos_amount) || 0,
+    rodriAmount: Number(r.rodri_amount) || 0,
+    chetosExpenses: Number(r.chetos_expenses) || 0,
+    rodriExpenses: Number(r.rodri_expenses) || 0,
+    difference: Number(r.difference) || 0,
+    note: r.note || "",
+  }));
+}
+
+async function addSettlementDB(s) {
+  const { error } = await supabase.from("settlements").insert({
+    id: s.id,
+    settled_at: s.settledAt,
+    chetos_amount: s.chetosAmount,
+    rodri_amount: s.rodriAmount,
+    chetos_expenses: s.chetosExpenses || 0,
+    rodri_expenses: s.rodriExpenses || 0,
+    difference: s.difference,
+    note: s.note || "",
+  });
+  if (error) console.error("addSettlementDB error:", error);
+}
+
+// ─── Expenses DB ──────────────────────────────────────────────────────────────
+async function fetchAllExpenses() {
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("fetchAllExpenses error:", error);
+    return [];
+  }
+  return (data || []).map((r) => ({
+    id: r.id,
+    amount: Number(r.amount) || 0,
+    paidBy: r.paid_by,
+    concept: r.concept || "",
+    isInvestment: !!r.is_investment,
+    createdAt: r.created_at,
+  }));
+}
+
+async function addExpenseDB(e) {
+  const { error } = await supabase.from("expenses").insert({
+    id: e.id,
+    amount: e.amount,
+    paid_by: e.paidBy,
+    concept: e.concept || "",
+    is_investment: !!e.isInvestment,
+    created_at: e.createdAt,
+  });
+  if (error) console.error("addExpenseDB error:", error);
+}
+
+async function deleteExpenseDB(id) {
+  const { error } = await supabase.from("expenses").delete().eq("id", id);
+  if (error) console.error("deleteExpenseDB error:", error);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -591,6 +709,50 @@ function SettingsPanel({
           {settingsErr && <div style={{ fontSize: 11, color: C.danger, margin: "8px 0" }}>{settingsErr}</div>}
 
           <Divider />
+          <Label>Starting Balances & Investment</Label>
+          <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 10, fontFamily: T.sans, lineHeight: 1.4 }}>
+            One-time historical values. Update these to reflect what you've collected before using the app.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Field label="Starting General ($)">
+              <input
+                type="number"
+                step="0.01"
+                style={inputStyle}
+                value={settingsDraft.startingGeneral ?? 0}
+                onChange={(e) => setSettingsDraft((d) => ({ ...d, startingGeneral: parseFloat(e.target.value) || 0 }))}
+              />
+            </Field>
+            <Field label="Investment ($)">
+              <input
+                type="number"
+                step="0.01"
+                style={inputStyle}
+                value={settingsDraft.investment ?? 0}
+                onChange={(e) => setSettingsDraft((d) => ({ ...d, investment: parseFloat(e.target.value) || 0 }))}
+              />
+            </Field>
+            <Field label="Starting Chetos ($)">
+              <input
+                type="number"
+                step="0.01"
+                style={inputStyle}
+                value={settingsDraft.startingChetos ?? 0}
+                onChange={(e) => setSettingsDraft((d) => ({ ...d, startingChetos: parseFloat(e.target.value) || 0 }))}
+              />
+            </Field>
+            <Field label="Starting Rodri ($)">
+              <input
+                type="number"
+                step="0.01"
+                style={inputStyle}
+                value={settingsDraft.startingRodri ?? 0}
+                onChange={(e) => setSettingsDraft((d) => ({ ...d, startingRodri: parseFloat(e.target.value) || 0 }))}
+              />
+            </Field>
+          </div>
+
+          <Divider />
           <div style={{ display: "flex", gap: 8 }}>
             <Btn onClick={() => setSettingsOpen(false)} variant="ghost">Cancel</Btn>
             <Btn onClick={applySettings} variant="primary">Save Settings</Btn>
@@ -607,14 +769,11 @@ function BookingForm({
   form, setForm, formErrors, successMsg,
   editingBookingId, cancelEdit, handleSubmit,
   rentalDays, getAvail, preview, formItemsMap,
-  settingsPanelProps,
 }) {
   const inputStyle = inp(isMobile);
 
   return (
     <div style={{ padding: isMobile ? "16px" : "16px 16px 24px" }}>
-      <SettingsPanel {...settingsPanelProps} />
-
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ fontSize: 11, letterSpacing: "0.08em", color: C.textMuted, textTransform: "uppercase", fontFamily: T.sans, fontWeight: 600 }}>
           {editingBookingId ? "Edit Booking" : "New Booking"}
@@ -886,13 +1045,17 @@ function BookingsList({
   isMobile, bookings, itemDefs,
   search, setSearch, filterService, setFilterService,
   filterStart, setFilterStart, filterEnd, setFilterEnd,
+  filterStatus, setFilterStatus,
   startEditBooking, requestRemoveBooking, exportCSV,
+  requestMarkDone,
 }) {
   const inputStyle = inp(isMobile);
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     return bookings.filter((b) => {
+      const status = b.status || "active";
+      if (filterStatus !== "all" && status !== filterStatus) return false;
       if (s) {
         const hay = `${b.name} ${b.salesRep} ${b.notes || ""} ${b.address || ""}`.toLowerCase();
         if (!hay.includes(s)) return false;
@@ -902,10 +1065,10 @@ function BookingsList({
       if (filterEnd && b.startDate > filterEnd) return false;
       return true;
     });
-  }, [bookings, search, filterService, filterStart, filterEnd]);
+  }, [bookings, search, filterService, filterStart, filterEnd, filterStatus]);
 
   const totalRev = filtered.reduce((s, b) => s + b.totalCost, 0);
-  const filtersActive = search || filterService !== "all" || filterStart || filterEnd;
+  const filtersActive = search || filterService !== "all" || filterStart || filterEnd || filterStatus !== "active";
 
   return (
     <div style={{ padding: isMobile ? "14px" : "20px 24px" }}>
@@ -914,6 +1077,14 @@ function BookingsList({
           <Label>Search</Label>
           <input style={inputStyle} placeholder="Customer, rep, notes…" value={search}
             onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div style={{ flex: "0 0 auto" }}>
+          <Label>Status</Label>
+          <select style={inputStyle} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="active">Active</option>
+            <option value="done">Done</option>
+            <option value="all">All</option>
+          </select>
         </div>
         <div style={{ flex: "0 0 auto" }}>
           <Label>Service</Label>
@@ -935,7 +1106,7 @@ function BookingsList({
         </div>
         {filtersActive && (
           <Btn small variant="ghost" onClick={() => {
-            setSearch(""); setFilterService("all"); setFilterStart(""); setFilterEnd("");
+            setSearch(""); setFilterService("all"); setFilterStart(""); setFilterEnd(""); setFilterStatus("active");
           }}>Clear</Btn>
         )}
         <div style={{ marginLeft: "auto" }}>
@@ -955,17 +1126,30 @@ function BookingsList({
         <>
           {isMobile ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {filtered.map((b) => (
-                <div key={b.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, padding: "12px 14px" }}>
+              {filtered.map((b) => {
+                const isDone = (b.status || "active") === "done";
+                return (
+                <div key={b.id} style={{
+                  background: C.surface,
+                  border: `1px solid ${isDone ? C.accent : C.border}`,
+                  borderRadius: 3,
+                  padding: "12px 14px",
+                  opacity: isDone ? 0.85 : 1,
+                }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: C.text, fontFamily: T.sans }}>{b.name}</div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: C.text, fontFamily: T.sans }}>{b.name}</div>
+                        {isDone && (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: C.accent, padding: "2px 6px", borderRadius: 2, letterSpacing: "0.06em" }}>DONE</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginTop: 2 }}>
                         {b.salesRep} · {fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <Btn small variant="ghost" onClick={() => startEditBooking(b)}>Edit</Btn>
+                      {!isDone && <Btn small variant="ghost" onClick={() => startEditBooking(b)}>Edit</Btn>}
                       <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
                     </div>
                   </div>
@@ -976,14 +1160,22 @@ function BookingsList({
                       return <div key={it.id} style={{ fontSize: 12, color: C.text, fontFamily: T.sans }}>{it.name}: {qty}</div>;
                     })}
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, background: C.bg, border: `1px solid ${C.border}`, padding: "2px 8px", borderRadius: 2 }}>
                       {b.serviceType === "delivery" ? "Delivery" : "Pickup"}
                     </span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</span>
                   </div>
+                  {!isDone && (
+                    <div style={{ marginTop: 10 }}>
+                      <Btn variant="primary" fullWidth onClick={() => requestMarkDone(b)}>
+                        ✓ Mark Done & Record Payment
+                      </Btn>
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
@@ -996,10 +1188,17 @@ function BookingsList({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((b, i) => (
-                    <tr key={b.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.bg }}>
+                  {filtered.map((b, i) => {
+                    const isDone = (b.status || "active") === "done";
+                    return (
+                    <tr key={b.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.bg, opacity: isDone ? 0.7 : 1 }}>
                       <td style={{ padding: "9px 10px", fontWeight: 600, color: C.text }}>
-                        {b.name}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {b.name}
+                          {isDone && (
+                            <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: C.accent, padding: "2px 5px", borderRadius: 2, letterSpacing: "0.06em" }}>DONE</span>
+                          )}
+                        </div>
                         {b.notes && <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{b.notes}</div>}
                       </td>
                       <td style={{ padding: "9px 10px", color: C.textSub }}>{b.salesRep}</td>
@@ -1019,11 +1218,15 @@ function BookingsList({
                       <td style={{ padding: "9px 10px", color: b.discount > 0 ? C.danger : C.textMuted, fontFamily: T.mono }}>{b.discount > 0 ? `-${b.discount}%` : "—"}</td>
                       <td style={{ padding: "9px 10px", fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</td>
                       <td style={{ padding: "9px 10px", whiteSpace: "nowrap" }}>
-                        <Btn small variant="ghost" onClick={() => startEditBooking(b)}>Edit</Btn>
+                        {!isDone && (
+                          <Btn small variant="primary" onClick={() => requestMarkDone(b)} style={{ marginRight: 4 }}>✓ Done</Btn>
+                        )}
+                        {!isDone && <Btn small variant="ghost" onClick={() => startEditBooking(b)}>Edit</Btn>}
                         <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1050,6 +1253,586 @@ function BookingsList({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Mark Done Dialog ────────────────────────────────────────────────────────
+function MarkDoneDialog({ open, booking, onConfirm, onCancel }) {
+  const [amount, setAmount] = useState("");
+  const [collectedBy, setCollectedBy] = useState("rodri");
+  const [err, setErr] = useState("");
+
+  // Reset whenever opened with a new booking
+  useEffect(() => {
+    if (open && booking) {
+      setAmount(booking.totalCost.toFixed(2));
+      setCollectedBy("rodri");
+      setErr("");
+    }
+  }, [open, booking]);
+
+  if (!open || !booking) return null;
+
+  function submit() {
+    const a = parseFloat(amount);
+    if (isNaN(a) || a < 0) {
+      setErr("Enter a valid amount.");
+      return;
+    }
+    onConfirm({ amount: a, collectedBy });
+  }
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 100, padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
+          padding: "20px 22px", maxWidth: 420, width: "100%", fontFamily: T.sans,
+        }}
+      >
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 4 }}>
+          Mark Booking Done
+        </div>
+        <div style={{ fontSize: 12, color: C.textSub, marginBottom: 16 }}>
+          {booking.name} — {fmtDateShort(booking.startDate)} to {fmtDateShort(booking.endDate)}
+        </div>
+
+        <Field label="Amount Collected ($)">
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            style={inp(false)}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            autoFocus
+          />
+        </Field>
+
+        <Field label="Collected By">
+          <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 3, overflow: "hidden" }}>
+            {[
+              { id: "chetos", label: "Chetos" },
+              { id: "rodri", label: "Rodri" },
+            ].map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setCollectedBy(p.id)}
+                style={{
+                  flex: 1, padding: "10px", border: "none", cursor: "pointer",
+                  fontFamily: T.sans, fontSize: 13, fontWeight: 600,
+                  background: collectedBy === p.id ? C.accent : C.surface,
+                  color: collectedBy === p.id ? "#fff" : C.textSub,
+                  transition: "all 0.15s",
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        {err && <div style={{ fontSize: 12, color: C.danger, marginBottom: 8 }}>{err}</div>}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+          <Btn onClick={onCancel} variant="ghost">Cancel</Btn>
+          <Btn onClick={submit} variant="primary">Mark Done</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Expense Dialog ──────────────────────────────────────────────────────
+function AddExpenseDialog({ open, onConfirm, onCancel }) {
+  const [amount, setAmount] = useState("");
+  const [paidBy, setPaidBy] = useState("rodri");
+  const [concept, setConcept] = useState("");
+  const [isInvestment, setIsInvestment] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setAmount("");
+      setPaidBy("rodri");
+      setConcept("");
+      setIsInvestment(false);
+      setErr("");
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  function submit() {
+    const a = parseFloat(amount);
+    if (isNaN(a) || a <= 0) {
+      setErr("Enter an amount greater than zero.");
+      return;
+    }
+    onConfirm({ amount: a, paidBy, concept: concept.trim(), isInvestment });
+  }
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 100, padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
+          padding: "20px 22px", maxWidth: 420, width: "100%", fontFamily: T.sans,
+        }}
+      >
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 12 }}>
+          Add Expense
+        </div>
+
+        <Field label="Amount ($)">
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            style={inp(false)}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            autoFocus
+          />
+        </Field>
+
+        <Field label="Paid By">
+          <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 3, overflow: "hidden" }}>
+            {[
+              { id: "chetos", label: "Chetos" },
+              { id: "rodri", label: "Rodri" },
+            ].map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPaidBy(p.id)}
+                style={{
+                  flex: 1, padding: "10px", border: "none", cursor: "pointer",
+                  fontFamily: T.sans, fontSize: 13, fontWeight: 600,
+                  background: paidBy === p.id ? C.accent : C.surface,
+                  color: paidBy === p.id ? "#fff" : C.textSub,
+                  transition: "all 0.15s",
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Concept (optional)" hint="e.g. gas, new chairs, repairs">
+          <input
+            type="text"
+            placeholder="What was this for?"
+            style={inp(false)}
+            value={concept}
+            onChange={(e) => setConcept(e.target.value)}
+          />
+        </Field>
+
+        <div
+          onClick={() => setIsInvestment(!isInvestment)}
+          style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 12px",
+            background: isInvestment ? C.sunshineSoft : C.bg,
+            border: `1px solid ${isInvestment ? C.sunshine : C.border}`,
+            borderRadius: 3,
+            cursor: "pointer",
+            marginBottom: 14,
+          }}
+        >
+          <div style={{
+            width: 18, height: 18, borderRadius: 3,
+            border: `2px solid ${isInvestment ? C.accent : C.borderStrong}`,
+            background: isInvestment ? C.accent : C.surface,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", fontSize: 12, fontWeight: 800,
+            flexShrink: 0,
+          }}>
+            {isInvestment ? "✓" : ""}
+          </div>
+          <div style={{ fontSize: 13, color: C.text, lineHeight: 1.3 }}>
+            <div style={{ fontWeight: 600 }}>Add to investment</div>
+            <div style={{ fontSize: 11, color: C.textSub, marginTop: 1 }}>
+              Equipment, supplies, anything that grows the business.
+            </div>
+          </div>
+        </div>
+
+        {err && <div style={{ fontSize: 12, color: C.danger, marginBottom: 8 }}>{err}</div>}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <Btn onClick={onCancel} variant="ghost">Cancel</Btn>
+          <Btn onClick={submit} variant="primary">Save Expense</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Settlement Dialog ────────────────────────────────────────────────────────
+function SettlementDialog({
+  open,
+  chetosCollected, chetosExpensesAmt, chetosNet,
+  rodriCollected, rodriExpensesAmt, rodriNet,
+  onConfirm, onCancel,
+}) {
+  if (!open) return null;
+  const diff = chetosNet - rodriNet;
+  const owesAmount = Math.abs(diff) / 2;
+  // If Chetos has higher net (more in pocket), Chetos pays Rodri.
+  // If Rodri has higher net, Rodri pays Chetos.
+  const whoPays =
+    Math.abs(diff) < 0.005 ? "Already even"
+    : diff > 0 ? "Chetos pays Rodri"
+    : "Rodri pays Chetos";
+
+  const Row = ({ label, chetos, rodri, isNet }) => (
+    <div style={{ display: "flex", fontSize: 12, padding: "6px 0", borderTop: isNet ? `1px solid ${C.borderStrong}` : "none", marginTop: isNet ? 6 : 0 }}>
+      <span style={{ flex: 1, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>{label}</span>
+      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${chetos.toFixed(2)}</span>
+      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${rodri.toFixed(2)}</span>
+    </div>
+  );
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 100, padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
+          padding: "20px 22px", maxWidth: 460, width: "100%", fontFamily: T.sans,
+        }}
+      >
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 12 }}>
+          Settle Up?
+        </div>
+
+        <div style={{ background: C.accentSoft, borderRadius: 3, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ display: "flex", fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", paddingBottom: 4, borderBottom: `1px solid ${C.border}` }}>
+            <span style={{ flex: 1 }}>&nbsp;</span>
+            <span style={{ width: 80, textAlign: "right" }}>Chetos</span>
+            <span style={{ width: 80, textAlign: "right" }}>Rodri</span>
+          </div>
+          <Row label="Collected" chetos={chetosCollected} rodri={rodriCollected} />
+          <Row label="Expenses (−)" chetos={chetosExpensesAmt} rodri={rodriExpensesAmt} />
+          <Row label="Net" chetos={chetosNet} rodri={rodriNet} isNet />
+        </div>
+
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: C.textSub, marginBottom: 4 }}>{whoPays}</div>
+          <div style={{ fontSize: 26, fontFamily: T.mono, fontWeight: 800, color: C.accentDeep }}>
+            ${owesAmount.toFixed(2)}
+          </div>
+        </div>
+
+        <div style={{ fontSize: 12, color: C.textSub, marginBottom: 16, lineHeight: 1.5 }}>
+          After settling, both balances and expense totals reset. The General account stays.
+          A full record is saved in Settlement History.
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <Btn onClick={onCancel} variant="ghost">Cancel</Btn>
+          <Btn onClick={onConfirm} variant="primary">Confirm & Reset</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Accounts View ────────────────────────────────────────────────────────────
+function AccountsView({
+  isMobile,
+  settings,
+  payments,
+  settlements,
+  expenses,
+  generalBalance,
+  totalCollected,
+  totalExpenses,
+  chetosCollected,
+  chetosExpensesAmt,
+  chetosNet,
+  rodriCollected,
+  rodriExpensesAmt,
+  rodriNet,
+  onSettle,
+  onAddExpense,
+  onDeleteExpense,
+  onUpdateInvestment,
+  settingsPanelProps,
+}) {
+  const [editingInv, setEditingInv] = useState(false);
+  const [invDraft, setInvDraft] = useState("");
+
+  const investment = settings.investment || 0;
+  const roiX = investment > 0 ? generalBalance / investment : 0;
+  const roiPct = investment > 0 ? ((generalBalance - investment) / investment) * 100 : 0;
+
+  function startEdit() {
+    setInvDraft(String(investment));
+    setEditingInv(true);
+  }
+  function saveInv() {
+    const v = parseFloat(invDraft);
+    if (isNaN(v) || v < 0) return;
+    onUpdateInvestment(v);
+    setEditingInv(false);
+  }
+
+  const card = {
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: 4,
+    padding: isMobile ? "14px 16px" : "18px 20px",
+  };
+
+  const canSettle = Math.abs(chetosNet) > 0.005 || Math.abs(rodriNet) > 0.005;
+
+  return (
+    <div style={{ padding: isMobile ? "14px" : "20px 24px" }}>
+      {/* Top row: General + Investment + ROI */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        {/* General Account */}
+        <div style={{ ...card, background: C.accentDeep, color: "#fff", border: `1px solid ${C.accentDeep}` }}>
+          <div style={{ fontSize: 10, letterSpacing: "0.08em", color: C.sunshine, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>
+            General Account
+          </div>
+          <div style={{ fontSize: isMobile ? 28 : 36, fontWeight: 800, fontFamily: T.mono, lineHeight: 1.1 }}>
+            ${generalBalance.toFixed(2)}
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 8, fontFamily: T.sans, lineHeight: 1.6 }}>
+            Starting: <span style={{ fontFamily: T.mono }}>${(settings.startingGeneral || 0).toFixed(2)}</span>
+            <span style={{ margin: "0 8px" }}>·</span>
+            Collected: <span style={{ fontFamily: T.mono }}>${totalCollected.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* Investment + ROI */}
+        <div style={card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+            <div style={{ fontSize: 10, letterSpacing: "0.08em", color: C.textMuted, textTransform: "uppercase", fontWeight: 600 }}>
+              Investment
+            </div>
+            {!editingInv && (
+              <Btn small variant="ghost" onClick={startEdit}>Edit</Btn>
+            )}
+          </div>
+          {editingInv ? (
+            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+              <input
+                type="number"
+                style={{ ...inp(false), maxWidth: 140 }}
+                value={invDraft}
+                autoFocus
+                onChange={(e) => setInvDraft(e.target.value)}
+              />
+              <Btn small variant="primary" onClick={saveInv}>Save</Btn>
+              <Btn small variant="ghost" onClick={() => setEditingInv(false)}>Cancel</Btn>
+            </div>
+          ) : (
+            <div style={{ fontSize: isMobile ? 22 : 26, fontWeight: 700, fontFamily: T.mono, color: C.text, marginBottom: 12 }}>
+              ${investment.toFixed(2)}
+            </div>
+          )}
+
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: "flex", gap: 18 }}>
+            <div>
+              <div style={{ fontSize: 9, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
+                Return
+              </div>
+              <div style={{ fontSize: 18, fontFamily: T.mono, fontWeight: 700, color: roiX >= 1 ? C.accent : C.textSub }}>
+                {investment > 0 ? `${roiX.toFixed(2)}x` : "—"}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
+                Margin
+              </div>
+              <div style={{ fontSize: 18, fontFamily: T.mono, fontWeight: 700, color: roiPct >= 0 ? C.accent : C.danger }}>
+                {investment > 0 ? `${roiPct >= 0 ? "+" : ""}${roiPct.toFixed(0)}%` : "—"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Personal balances with breakdown */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        {[
+          { name: "Chetos", collected: chetosCollected, expensesAmt: chetosExpensesAmt, net: chetosNet, starting: settings.startingChetos || 0 },
+          { name: "Rodri", collected: rodriCollected, expensesAmt: rodriExpensesAmt, net: rodriNet, starting: settings.startingRodri || 0 },
+        ].map((p) => (
+          <div key={p.name} style={card}>
+            <div style={{ fontSize: 10, letterSpacing: "0.08em", color: C.textMuted, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
+              {p.name}
+            </div>
+            <div style={{ fontSize: isMobile ? 24 : 30, fontWeight: 800, fontFamily: T.mono, color: p.net >= 0 ? C.text : C.danger, lineHeight: 1.1 }}>
+              {p.net < 0 ? "−" : ""}${Math.abs(p.net).toFixed(2)}
+            </div>
+            <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 11, color: C.textSub, fontFamily: T.sans }}>
+              <span>Collected: <span style={{ fontFamily: T.mono, color: C.text }}>${p.collected.toFixed(2)}</span></span>
+              <span>Expenses: <span style={{ fontFamily: T.mono, color: C.danger }}>−${p.expensesAmt.toFixed(2)}</span></span>
+            </div>
+            {p.starting !== 0 && (
+              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4, fontFamily: T.sans }}>
+                Starting: <span style={{ fontFamily: T.mono }}>${p.starting.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Settle Up button row */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <Btn variant="default" onClick={onAddExpense}>+ Add Expense</Btn>
+        <Btn
+          variant="primary"
+          onClick={onSettle}
+          disabled={!canSettle}
+          style={canSettle ? { background: C.sunshine, color: C.accentDeep, borderColor: C.sunshine, fontWeight: 700 } : undefined}
+        >
+          ⚖ Settle Up
+        </Btn>
+      </div>
+
+      {/* Expenses list */}
+      <div style={{ ...card, marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 10, letterSpacing: "0.08em", color: C.textMuted, textTransform: "uppercase", fontWeight: 600 }}>
+            Expenses (since last settle)
+          </div>
+          <div style={{ fontSize: 12, color: C.textSub, fontFamily: T.mono }}>
+            {expenses.length} item{expenses.length !== 1 ? "s" : ""} · ${totalExpenses.toFixed(2)}
+          </div>
+        </div>
+        {expenses.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans, padding: "10px 0" }}>
+            No expenses logged yet.
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: T.sans }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                {["Date", "Concept", "Paid By", "Inv?", "Amount", ""].map((h) => (
+                  <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...expenses].reverse().map((e) => (
+                <tr key={e.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <td style={{ padding: "8px 8px", color: C.textSub, whiteSpace: "nowrap" }}>
+                    {new Date(e.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </td>
+                  <td style={{ padding: "8px 8px", color: C.text }}>{e.concept || <span style={{ color: C.textMuted, fontStyle: "italic" }}>—</span>}</td>
+                  <td style={{ padding: "8px 8px", color: C.textSub, textTransform: "capitalize" }}>{e.paidBy}</td>
+                  <td style={{ padding: "8px 8px" }}>
+                    {e.isInvestment && (
+                      <span style={{ fontSize: 9, fontWeight: 700, color: C.accentDeep, background: C.sunshine, padding: "2px 6px", borderRadius: 2, letterSpacing: "0.06em" }}>INV</span>
+                    )}
+                  </td>
+                  <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.danger, fontWeight: 600 }}>−${e.amount.toFixed(2)}</td>
+                  <td style={{ padding: "4px 8px", whiteSpace: "nowrap", textAlign: "right" }}>
+                    <Btn small variant="ghost" onClick={() => onDeleteExpense(e)} style={{ color: C.danger }}>Remove</Btn>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Settlement history */}
+      <div style={card}>
+        <div style={{ fontSize: 10, letterSpacing: "0.08em", color: C.textMuted, textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>
+          Settlement History
+        </div>
+        {settlements.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans, padding: "10px 0" }}>
+            No settlements yet.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: T.sans, minWidth: 480 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  {["Date", "Chetos C/E", "Rodri C/E", "Settled"].map((h) => (
+                    <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {settlements.map((s) => (
+                  <tr key={s.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: "8px 8px", color: C.text, whiteSpace: "nowrap" }}>
+                      {new Date(s.settledAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                    <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.textSub, whiteSpace: "nowrap" }}>
+                      ${s.chetosAmount.toFixed(2)} / <span style={{ color: C.danger }}>${s.chetosExpenses.toFixed(2)}</span>
+                    </td>
+                    <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.textSub, whiteSpace: "nowrap" }}>
+                      ${s.rodriAmount.toFixed(2)} / <span style={{ color: C.danger }}>${s.rodriExpenses.toFixed(2)}</span>
+                    </td>
+                    <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.accent, fontWeight: 700, whiteSpace: "nowrap" }}>
+                      ${(Math.abs(s.difference) / 2).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 6, fontFamily: T.sans }}>
+              C/E = Collected / Expenses
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Settings — moved here from the booking form sidebar */}
+      <div style={{ marginTop: 18 }}>
+        <SettingsPanel {...settingsPanelProps} />
+      </div>
     </div>
   );
 }
@@ -1163,6 +1946,9 @@ export default function App() {
   const isMobile = width < 640;
 
   const [bookings, setBookings] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [settlements, setSettlements] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [settings, setSettings] = useState(() => {
     const s = { ...DEFAULT_SETTINGS };
     if (!s.items) s.items = DEFAULT_ITEMS;
@@ -1171,18 +1957,38 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  // Load bookings + settings from Supabase on mount
+  // Mark-done dialog and settle dialog
+  const [doneDialog, setDoneDialog] = useState(null); // booking object or null
+  const [settleDialog, setSettleDialog] = useState(false);
+  const [expenseDialog, setExpenseDialog] = useState(false);
+
+  // Bookings list status filter: all / active / done
+  const [filterStatus, setFilterStatus] = useState("active");
+
+  // Load all data from Supabase on mount
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [bks, st] = await Promise.all([fetchAllBookings(), fetchSettings()]);
+        const [bks, st, pmts, stls, exps] = await Promise.all([
+          fetchAllBookings(),
+          fetchSettings(),
+          fetchAllPayments(),
+          fetchAllSettlements(),
+          fetchAllExpenses(),
+        ]);
         if (cancelled) return;
         setBookings(bks);
+        setPayments(pmts);
+        setSettlements(stls);
+        setExpenses(exps);
         if (st) {
-          setSettings({ ...st, items: st.items?.length ? st.items : DEFAULT_ITEMS });
+          setSettings({
+            ...DEFAULT_SETTINGS,
+            ...st,
+            items: st.items?.length ? st.items : DEFAULT_ITEMS,
+          });
         } else {
-          // First run: persist defaults so other devices see the same setup
           await saveSettingsDB(DEFAULT_SETTINGS);
         }
       } catch (e) {
@@ -1382,6 +2188,91 @@ export default function App() {
     downloadCSV(csv, `bookings-${stamp}.csv`);
   }
 
+  function requestMarkDone(b) {
+    setDoneDialog(b);
+  }
+  async function confirmMarkDone({ amount, collectedBy }) {
+    const b = doneDialog;
+    if (!b) return;
+    const payment = {
+      id: genId(),
+      bookingId: b.id,
+      amount,
+      collectedBy,
+      collectedAt: new Date().toISOString(),
+      note: "",
+    };
+    // Optimistic UI updates
+    setPayments((p) => [...p, payment]);
+    setBookings((bs) => bs.map((x) => (x.id === b.id ? { ...x, status: "done" } : x)));
+    setDoneDialog(null);
+    // Persist
+    await Promise.all([addPaymentDB(payment), setBookingStatusDB(b.id, "done")]);
+  }
+
+  function requestAddExpense() {
+    setExpenseDialog(true);
+  }
+  async function confirmAddExpense({ amount, paidBy, concept, isInvestment }) {
+    const expense = {
+      id: genId(),
+      amount,
+      paidBy,
+      concept,
+      isInvestment,
+      createdAt: new Date().toISOString(),
+    };
+    setExpenses((xs) => [...xs, expense]);
+    setExpenseDialog(false);
+    const writes = [addExpenseDB(expense)];
+    // If flagged, bump investment in settings
+    if (isInvestment) {
+      const newSettings = { ...settings, investment: (settings.investment || 0) + amount };
+      setSettings(newSettings);
+      writes.push(saveSettingsDB(newSettings));
+    }
+    await Promise.all(writes);
+  }
+
+  function requestDeleteExpense(e) {
+    setConfirmState({
+      title: "Remove expense?",
+      message: `Remove this expense${e.concept ? ` ("${e.concept}")` : ""}? ${e.isInvestment ? "Investment will not be reduced — edit it manually if needed." : ""}`,
+      confirmLabel: "Remove",
+      danger: true,
+      onConfirm: () => {
+        setExpenses((xs) => xs.filter((x) => x.id !== e.id));
+        deleteExpenseDB(e.id);
+        setConfirmState(null);
+      },
+    });
+  }
+
+  async function confirmSettle() {
+    const settlement = {
+      id: genId(),
+      settledAt: new Date().toISOString(),
+      chetosAmount: chetosCollected,
+      rodriAmount: rodriCollected,
+      chetosExpenses: chetosExpensesAmt,
+      rodriExpenses: rodriExpensesAmt,
+      difference: chetosNet - rodriNet,
+      note: "",
+    };
+    // Reset starting balances to zero (they've been "absorbed" by the settlement record).
+    // Going forward, balances will accrue only from new payments after this settlement.
+    const newSettings = { ...settings, startingChetos: 0, startingRodri: 0 };
+    setSettings(newSettings);
+    setSettlements((s) => [settlement, ...s]);
+    setSettleDialog(false);
+    await Promise.all([addSettlementDB(settlement), saveSettingsDB(newSettings)]);
+  }
+
+  function updateInvestment(amount) {
+    const newSettings = { ...settings, investment: amount };
+    saveSettings(newSettings);
+  }
+
   const formItemsMap = {};
   itemDefs.forEach((it) => { formItemsMap[it.id] = parseInt(form.items[it.id]) || 0; });
   const anyItem = itemDefs.some((it) => formItemsMap[it.id] > 0);
@@ -1389,6 +2280,42 @@ export default function App() {
     ? calcTotal(formItemsMap, itemDefs, form.serviceType, form.deliveryFee, form.discount)
     : null;
   const totalRevenue = bookings.reduce((s, b) => s + b.totalCost, 0);
+
+  // ── Account balances ──
+  // Filter to "since last settlement" for things that reset on settle.
+  const lastSettlementAt = settlements.length > 0 ? settlements[0].settledAt : null;
+
+  const totalCollected = payments.reduce((s, p) => s + p.amount, 0);
+  const expensesSinceSettle = lastSettlementAt
+    ? expenses.filter((e) => e.createdAt > lastSettlementAt)
+    : expenses;
+  const totalExpenses = expensesSinceSettle.reduce((s, e) => s + e.amount, 0);
+
+  // General balance: starting + ALL collected ever. Pure revenue counter.
+  // Expenses never reduce it — they're paid out of personal pockets and reconciled at settle-up.
+  const generalBalance = (settings.startingGeneral || 0) + totalCollected;
+
+  // Per-partner: collected and expenses since last settle (these reset on settle).
+  const paymentsSinceSettle = lastSettlementAt
+    ? payments.filter((p) => p.collectedAt > lastSettlementAt)
+    : payments;
+
+  const chetosCollected = paymentsSinceSettle
+    .filter((p) => p.collectedBy === "chetos")
+    .reduce((s, p) => s + p.amount, 0);
+  const rodriCollected = paymentsSinceSettle
+    .filter((p) => p.collectedBy === "rodri")
+    .reduce((s, p) => s + p.amount, 0);
+  const chetosExpensesAmt = expensesSinceSettle
+    .filter((e) => e.paidBy === "chetos")
+    .reduce((s, e) => s + e.amount, 0);
+  const rodriExpensesAmt = expensesSinceSettle
+    .filter((e) => e.paidBy === "rodri")
+    .reduce((s, e) => s + e.amount, 0);
+
+  // Net = collected − expenses (+ starting). Positive = holding cash; negative = owed money.
+  const chetosNet = (settings.startingChetos || 0) + chetosCollected - chetosExpensesAmt;
+  const rodriNet = (settings.startingRodri || 0) + rodriCollected - rodriExpensesAmt;
 
   const dayStrain = useCallback((ds) => {
     let max = 0;
@@ -1415,7 +2342,7 @@ export default function App() {
     isMobile, itemDefs, startDate, endDate, bookings,
     form, setForm, formErrors, successMsg,
     editingBookingId, cancelEdit, handleSubmit,
-    rentalDays, getAvail, preview, formItemsMap, settingsPanelProps,
+    rentalDays, getAvail, preview, formItemsMap,
   };
   const calendarProps = {
     isMobile, months, safeMonth, setCalMonth,
@@ -1425,7 +2352,21 @@ export default function App() {
     isMobile, bookings, itemDefs,
     search, setSearch, filterService, setFilterService,
     filterStart, setFilterStart, filterEnd, setFilterEnd,
+    filterStatus, setFilterStatus,
     startEditBooking, requestRemoveBooking, exportCSV,
+    requestMarkDone,
+  };
+
+  const accountsProps = {
+    isMobile, settings, payments, settlements, expenses,
+    generalBalance, totalCollected, totalExpenses,
+    chetosCollected, chetosExpensesAmt, chetosNet,
+    rodriCollected, rodriExpensesAmt, rodriNet,
+    onSettle: () => setSettleDialog(true),
+    onAddExpense: requestAddExpense,
+    onDeleteExpense: requestDeleteExpense,
+    onUpdateInvestment: updateInvestment,
+    settingsPanelProps,
   };
 
   if (loading) {
@@ -1466,11 +2407,13 @@ export default function App() {
         <Header isMobile={isMobile} bookings={bookings} totalRevenue={totalRevenue} />
         {mobileTab === "calendar" && <CalendarView {...calendarProps} />}
         {mobileTab === "list" && <BookingsList {...listProps} />}
+        {mobileTab === "accounts" && <AccountsView {...accountsProps} />}
         {mobileTab === "form" && <BookingForm {...bookingFormProps} />}
         <TabBar bottom active={mobileTab} onChange={setMobileTab}
           tabs={[
-            { id: "calendar", label: "Calendar", icon: "▦" },
+            { id: "calendar", label: "Cal", icon: "▦" },
             { id: "list", label: "Bookings", icon: "≡" },
+            { id: "accounts", label: "$", icon: "$" },
             { id: "form", label: editingBookingId ? "Edit" : "New", icon: editingBookingId ? "✎" : "+" },
           ]} />
         <ConfirmDialog
@@ -1481,6 +2424,28 @@ export default function App() {
           danger={confirmState?.danger}
           onConfirm={confirmState?.onConfirm}
           onCancel={() => setConfirmState(null)}
+        />
+        <MarkDoneDialog
+          open={!!doneDialog}
+          booking={doneDialog}
+          onConfirm={confirmMarkDone}
+          onCancel={() => setDoneDialog(null)}
+        />
+        <SettlementDialog
+          open={settleDialog}
+          chetosCollected={chetosCollected}
+          chetosExpensesAmt={chetosExpensesAmt}
+          chetosNet={chetosNet}
+          rodriCollected={rodriCollected}
+          rodriExpensesAmt={rodriExpensesAmt}
+          rodriNet={rodriNet}
+          onConfirm={confirmSettle}
+          onCancel={() => setSettleDialog(false)}
+        />
+        <AddExpenseDialog
+          open={expenseDialog}
+          onConfirm={confirmAddExpense}
+          onCancel={() => setExpenseDialog(false)}
         />
       </div>
     );
@@ -1495,10 +2460,15 @@ export default function App() {
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: C.surface }}>
           <TabBar active={desktopTab} onChange={setDesktopTab}
-            tabs={[{ id: "calendar", label: "Calendar" }, { id: "list", label: "Bookings" }]} />
+            tabs={[
+              { id: "calendar", label: "Calendar" },
+              { id: "list", label: "Bookings" },
+              { id: "accounts", label: "Accounts" },
+            ]} />
           <div style={{ flex: 1, overflowY: "auto" }}>
             {desktopTab === "calendar" && <CalendarView {...calendarProps} />}
             {desktopTab === "list" && <BookingsList {...listProps} />}
+            {desktopTab === "accounts" && <AccountsView {...accountsProps} />}
           </div>
         </div>
       </div>
@@ -1510,6 +2480,28 @@ export default function App() {
         danger={confirmState?.danger}
         onConfirm={confirmState?.onConfirm}
         onCancel={() => setConfirmState(null)}
+      />
+      <MarkDoneDialog
+        open={!!doneDialog}
+        booking={doneDialog}
+        onConfirm={confirmMarkDone}
+        onCancel={() => setDoneDialog(null)}
+      />
+      <SettlementDialog
+        open={settleDialog}
+        chetosCollected={chetosCollected}
+        chetosExpensesAmt={chetosExpensesAmt}
+        chetosNet={chetosNet}
+        rodriCollected={rodriCollected}
+        rodriExpensesAmt={rodriExpensesAmt}
+        rodriNet={rodriNet}
+        onConfirm={confirmSettle}
+        onCancel={() => setSettleDialog(false)}
+      />
+      <AddExpenseDialog
+        open={expenseDialog}
+        onConfirm={confirmAddExpense}
+        onCancel={() => setExpenseDialog(false)}
       />
     </div>
   );
