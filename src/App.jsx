@@ -1583,6 +1583,7 @@ function AccountsView({
   rodriCollected,
   rodriExpensesAmt,
   rodriNet,
+  projectedRevenue,
   onSettle,
   onAddExpense,
   onDeleteExpense,
@@ -1595,6 +1596,11 @@ function AccountsView({
   const investment = settings.investment || 0;
   const roiX = investment > 0 ? generalBalance / investment : 0;
   const roiPct = investment > 0 ? ((generalBalance - investment) / investment) * 100 : 0;
+  // Projected = if every active booking gets paid in full, what does General become?
+  const projectedGeneral = generalBalance + projectedRevenue;
+  const projRoiX = investment > 0 ? projectedGeneral / investment : 0;
+  const projRoiPct = investment > 0 ? ((projectedGeneral - investment) / investment) * 100 : 0;
+  const hasProjection = projectedRevenue > 0;
 
   function startEdit() {
     setInvDraft(String(investment));
@@ -1670,23 +1676,49 @@ function AccountsView({
             </div>
           )}
 
-          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: "flex", gap: 18 }}>
-            <div>
-              <div style={{ fontSize: 9, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+            {/* Header row */}
+            <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr", gap: 8, marginBottom: 6 }}>
+              <span />
+              <div style={{ fontSize: 9, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
+                Actual
+              </div>
+              <div style={{ fontSize: 9, color: C.sunshine === C.sunshine ? C.warning : C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
+                Projected
+              </div>
+            </div>
+
+            {/* Return row */}
+            <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr", gap: 8, alignItems: "baseline", marginBottom: 4 }}>
+              <div style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
                 Return
               </div>
               <div style={{ fontSize: 18, fontFamily: T.mono, fontWeight: 700, color: roiX >= 1 ? C.accent : C.textSub }}>
                 {investment > 0 ? `${roiX.toFixed(2)}x` : "—"}
               </div>
+              <div style={{ fontSize: 18, fontFamily: T.mono, fontWeight: 700, color: hasProjection && projRoiX >= 1 ? C.warning : C.textMuted }}>
+                {investment > 0 && hasProjection ? `${projRoiX.toFixed(2)}x` : "—"}
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: 9, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
+
+            {/* Margin row */}
+            <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr", gap: 8, alignItems: "baseline" }}>
+              <div style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
                 Margin
               </div>
               <div style={{ fontSize: 18, fontFamily: T.mono, fontWeight: 700, color: roiPct >= 0 ? C.accent : C.danger }}>
                 {investment > 0 ? `${roiPct >= 0 ? "+" : ""}${roiPct.toFixed(0)}%` : "—"}
               </div>
+              <div style={{ fontSize: 18, fontFamily: T.mono, fontWeight: 700, color: hasProjection ? (projRoiPct >= 0 ? C.warning : C.danger) : C.textMuted }}>
+                {investment > 0 && hasProjection ? `${projRoiPct >= 0 ? "+" : ""}${projRoiPct.toFixed(0)}%` : "—"}
+              </div>
             </div>
+
+            {hasProjection && (
+              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8, fontFamily: T.sans, lineHeight: 1.4 }}>
+                Projected adds <span style={{ fontFamily: T.mono, color: C.text, fontWeight: 600 }}>${projectedRevenue.toFixed(2)}</span> from active bookings.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2317,6 +2349,12 @@ export default function App() {
   const chetosNet = (settings.startingChetos || 0) + chetosCollected - chetosExpensesAmt;
   const rodriNet = (settings.startingRodri || 0) + rodriCollected - rodriExpensesAmt;
 
+  // Projected revenue: sum of totalCost for all active (not yet done) bookings.
+  // This represents money we expect to collect if all upcoming bookings pay in full.
+  const projectedRevenue = bookings
+    .filter((b) => (b.status || "active") === "active")
+    .reduce((s, b) => s + b.totalCost, 0);
+
   const dayStrain = useCallback((ds) => {
     let max = 0;
     itemDefs.forEach((it) => {
@@ -2362,6 +2400,7 @@ export default function App() {
     generalBalance, totalCollected, totalExpenses,
     chetosCollected, chetosExpensesAmt, chetosNet,
     rodriCollected, rodriExpensesAmt, rodriNet,
+    projectedRevenue,
     onSettle: () => setSettleDialog(true),
     onAddExpense: requestAddExpense,
     onDeleteExpense: requestDeleteExpense,
