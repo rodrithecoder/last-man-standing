@@ -36,7 +36,6 @@ const DEFAULT_SETTINGS = {
 };
 
 // ─── Supabase Persistence ─────────────────────────────────────────────────────
-// Convert app-shape booking <-> DB-shape booking
 function bookingToDB(b) {
   return {
     id: b.id,
@@ -83,10 +82,7 @@ async function fetchAllBookings() {
     .from("bookings")
     .select("*")
     .order("start_date", { ascending: true });
-  if (error) {
-    console.error("fetchAllBookings error:", error);
-    return [];
-  }
+  if (error) { console.error("fetchAllBookings error:", error); return []; }
   return (data || []).map(bookingFromDB);
 }
 
@@ -102,14 +98,8 @@ async function deleteBookingDB(id) {
 
 async function fetchSettings() {
   const { data, error } = await supabase
-    .from("settings")
-    .select("data")
-    .eq("id", 1)
-    .maybeSingle();
-  if (error) {
-    console.error("fetchSettings error:", error);
-    return null;
-  }
+    .from("settings").select("data").eq("id", 1).maybeSingle();
+  if (error) { console.error("fetchSettings error:", error); return null; }
   return data?.data || null;
 }
 
@@ -120,16 +110,10 @@ async function saveSettingsDB(settings) {
   if (error) console.error("saveSettingsDB error:", error);
 }
 
-// ─── Payments / Settlements DB ────────────────────────────────────────────────
 async function fetchAllPayments() {
   const { data, error } = await supabase
-    .from("payments")
-    .select("*")
-    .order("collected_at", { ascending: true });
-  if (error) {
-    console.error("fetchAllPayments error:", error);
-    return [];
-  }
+    .from("payments").select("*").order("collected_at", { ascending: true });
+  if (error) { console.error("fetchAllPayments error:", error); return []; }
   return (data || []).map((r) => ({
     id: r.id,
     bookingId: r.booking_id,
@@ -142,33 +126,21 @@ async function fetchAllPayments() {
 
 async function addPaymentDB(p) {
   const { error } = await supabase.from("payments").insert({
-    id: p.id,
-    booking_id: p.bookingId,
-    amount: p.amount,
-    collected_by: p.collectedBy,
-    collected_at: p.collectedAt,
-    note: p.note || "",
+    id: p.id, booking_id: p.bookingId, amount: p.amount,
+    collected_by: p.collectedBy, collected_at: p.collectedAt, note: p.note || "",
   });
   if (error) console.error("addPaymentDB error:", error);
 }
 
 async function setBookingStatusDB(id, status) {
-  const { error } = await supabase
-    .from("bookings")
-    .update({ status })
-    .eq("id", id);
+  const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
   if (error) console.error("setBookingStatusDB error:", error);
 }
 
 async function fetchAllSettlements() {
   const { data, error } = await supabase
-    .from("settlements")
-    .select("*")
-    .order("settled_at", { ascending: false });
-  if (error) {
-    console.error("fetchAllSettlements error:", error);
-    return [];
-  }
+    .from("settlements").select("*").order("settled_at", { ascending: false });
+  if (error) { console.error("fetchAllSettlements error:", error); return []; }
   return (data || []).map((r) => ({
     id: r.id,
     settledAt: r.settled_at,
@@ -183,28 +155,18 @@ async function fetchAllSettlements() {
 
 async function addSettlementDB(s) {
   const { error } = await supabase.from("settlements").insert({
-    id: s.id,
-    settled_at: s.settledAt,
-    chetos_amount: s.chetosAmount,
-    rodri_amount: s.rodriAmount,
-    chetos_expenses: s.chetosExpenses || 0,
-    rodri_expenses: s.rodriExpenses || 0,
-    difference: s.difference,
-    note: s.note || "",
+    id: s.id, settled_at: s.settledAt,
+    chetos_amount: s.chetosAmount, rodri_amount: s.rodriAmount,
+    chetos_expenses: s.chetosExpenses || 0, rodri_expenses: s.rodriExpenses || 0,
+    difference: s.difference, note: s.note || "",
   });
   if (error) console.error("addSettlementDB error:", error);
 }
 
-// ─── Expenses DB ──────────────────────────────────────────────────────────────
 async function fetchAllExpenses() {
   const { data, error } = await supabase
-    .from("expenses")
-    .select("*")
-    .order("created_at", { ascending: true });
-  if (error) {
-    console.error("fetchAllExpenses error:", error);
-    return [];
-  }
+    .from("expenses").select("*").order("created_at", { ascending: true });
+  if (error) { console.error("fetchAllExpenses error:", error); return []; }
   return (data || []).map((r) => ({
     id: r.id,
     amount: Number(r.amount) || 0,
@@ -217,12 +179,8 @@ async function fetchAllExpenses() {
 
 async function addExpenseDB(e) {
   const { error } = await supabase.from("expenses").insert({
-    id: e.id,
-    amount: e.amount,
-    paid_by: e.paidBy,
-    concept: e.concept || "",
-    is_investment: !!e.isInvestment,
-    created_at: e.createdAt,
+    id: e.id, amount: e.amount, paid_by: e.paidBy,
+    concept: e.concept || "", is_investment: !!e.isInvestment, created_at: e.createdAt,
   });
   if (error) console.error("addExpenseDB error:", error);
 }
@@ -230,6 +188,33 @@ async function addExpenseDB(e) {
 async function deleteExpenseDB(id) {
   const { error } = await supabase.from("expenses").delete().eq("id", id);
   if (error) console.error("deleteExpenseDB error:", error);
+}
+
+// ─── Vacations DB (NEW) ───────────────────────────────────────────────────────
+async function fetchAllVacations() {
+  const { data, error } = await supabase
+    .from("vacations").select("*").order("start_date", { ascending: true });
+  if (error) { console.error("fetchAllVacations error:", error); return []; }
+  return (data || []).map((r) => ({
+    id: r.id,
+    repName: r.rep_name,
+    startDate: r.start_date,
+    endDate: r.end_date,
+    note: r.note || "",
+  }));
+}
+
+async function upsertVacationDB(v) {
+  const { error } = await supabase.from("vacations").upsert({
+    id: v.id, rep_name: v.repName,
+    start_date: v.startDate, end_date: v.endDate, note: v.note || "",
+  });
+  if (error) console.error("upsertVacationDB error:", error);
+}
+
+async function deleteVacationDB(id) {
+  const { error } = await supabase.from("vacations").delete().eq("id", id);
+  if (error) console.error("deleteVacationDB error:", error);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -241,28 +226,19 @@ function fmtDate(ds) {
   if (!ds) return "";
   const [y, m, d] = ds.split("-");
   return new Date(y, m - 1, d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month: "short", day: "numeric", year: "numeric",
   });
 }
 function fmtDateShort(ds) {
   if (!ds) return "";
   const [y, m, d] = ds.split("-");
   return new Date(y, m - 1, d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
+    month: "short", day: "numeric",
   });
 }
-function getDIM(y, m) {
-  return new Date(y, m + 1, 0).getDate();
-}
+function getDIM(y, m) { return new Date(y, m + 1, 0).getDate(); }
 function daysBetween(s, e) {
-  return (
-    Math.round(
-      (new Date(e + "T00:00:00") - new Date(s + "T00:00:00")) / 86400000
-    ) + 1
-  );
+  return Math.round((new Date(e + "T00:00:00") - new Date(s + "T00:00:00")) / 86400000) + 1;
 }
 function getMonths(sd, ed) {
   if (!sd || !ed) return [];
@@ -277,8 +253,6 @@ function getMonths(sd, ed) {
   }
   return res;
 }
-// FIX: Build local YYYY-MM-DD without going through toISOString (which uses UTC
-// and can shift the date by a day in non-UTC timezones).
 function localDateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -297,9 +271,7 @@ function maxUsedInRange(bookings, start, end, itemId, excludeId = null) {
   while (cur <= last) {
     const ds = localDateStr(cur);
     const used = bookings
-      .filter(
-        (b) => b.id !== excludeId && b.startDate <= ds && b.endDate >= ds
-      )
+      .filter((b) => b.id !== excludeId && b.startDate <= ds && b.endDate >= ds)
       .reduce((s, b) => s + (b.items?.[itemId] || 0), 0);
     max = Math.max(max, used);
     cur.setDate(cur.getDate() + 1);
@@ -307,38 +279,20 @@ function maxUsedInRange(bookings, start, end, itemId, excludeId = null) {
   return max;
 }
 function calcTotal(itemsMap, itemDefs, svcType, deliveryFee, discount) {
-  const itemsTotal = itemDefs.reduce(
-    (s, it) => s + (itemsMap[it.id] || 0) * it.price,
-    0
-  );
+  const itemsTotal = itemDefs.reduce((s, it) => s + (itemsMap[it.id] || 0) * it.price, 0);
   const fee = svcType === "delivery" ? parseFloat(deliveryFee) || 0 : 0;
   const sub = itemsTotal + fee;
   const disc = sub * ((parseFloat(discount) || 0) / 100);
-  return {
-    itemsTotal,
-    deliveryFee: fee,
-    discountAmount: disc,
-    totalCost: sub - disc,
-  };
+  return { itemsTotal, deliveryFee: fee, discountAmount: disc, totalCost: sub - disc };
 }
 
-// CSV export helper
+// CSV export helper (bookings only — keeps existing behavior)
 function bookingsToCSV(bookings, itemDefs) {
   const headers = [
-    "Customer",
-    "Sales Rep",
-    "Start",
-    "End",
-    "Days",
+    "Customer", "Sales Rep", "Start", "End", "Days",
     ...itemDefs.map((i) => i.name),
-    "Service",
-    "Address",
-    "Subtotal",
-    "Delivery Fee",
-    "Discount %",
-    "Discount $",
-    "Total",
-    "Notes",
+    "Service", "Address", "Subtotal", "Delivery Fee",
+    "Discount %", "Discount $", "Total", "Notes",
   ];
   const escape = (v) => {
     const s = String(v ?? "");
@@ -346,23 +300,16 @@ function bookingsToCSV(bookings, itemDefs) {
   };
   const rows = bookings.map((b) =>
     [
-      b.name,
-      b.salesRep,
-      b.startDate,
-      b.endDate,
-      b.days,
+      b.name, b.salesRep, b.startDate, b.endDate, b.days,
       ...itemDefs.map((i) => b.items?.[i.id] || 0),
-      b.serviceType,
-      b.address || "",
+      b.serviceType, b.address || "",
       (b.itemsTotal || 0).toFixed(2),
       (b.deliveryFee || 0).toFixed(2),
       b.discount || 0,
       (b.discountAmount || 0).toFixed(2),
       b.totalCost.toFixed(2),
       b.notes || "",
-    ]
-      .map(escape)
-      .join(",")
+    ].map(escape).join(",")
   );
   return [headers.join(","), ...rows].join("\n");
 }
@@ -376,6 +323,98 @@ function downloadCSV(text, filename) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Vacations active on a given date (NEW)
+function vacationsOnDate(vacations, ds) {
+  return vacations.filter((v) => v.startDate <= ds && v.endDate >= ds);
+}
+
+// Build a single CSV with all data stacked in labeled sections (NEW)
+function buildBackupCSV({ bookings, vacations, payments, settlements, expenses, itemDefs }) {
+  const escape = (v) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const section = (title, headers, rows) => {
+    const out = [`# ${title}`];
+    out.push(headers.map(escape).join(","));
+    if (rows.length === 0) out.push("(none)");
+    else rows.forEach((r) => out.push(r.map(escape).join(",")));
+    return out.join("\n");
+  };
+
+  const stamp = new Date().toISOString();
+  const meta = section("BACKUP META", ["Generated", "App"],
+    [[stamp, "Last Man Standing — Rental Manager"]]);
+
+  const bookingsSection = section("BOOKINGS",
+    [
+      "ID", "Customer", "Sales Rep", "Start", "End", "Days",
+      ...itemDefs.map((i) => i.name),
+      "Service", "Address", "Subtotal", "Delivery Fee",
+      "Discount %", "Discount $", "Total", "Status", "Notes",
+    ],
+    bookings.map((b) => [
+      b.id, b.name, b.salesRep, b.startDate, b.endDate, b.days,
+      ...itemDefs.map((i) => b.items?.[i.id] || 0),
+      b.serviceType, b.address || "",
+      (b.itemsTotal || 0).toFixed(2),
+      (b.deliveryFee || 0).toFixed(2),
+      b.discount || 0,
+      (b.discountAmount || 0).toFixed(2),
+      (b.totalCost || 0).toFixed(2),
+      b.status || "active",
+      b.notes || "",
+    ])
+  );
+
+  const vacationsSection = section("VACATIONS",
+    ["ID", "Rep Name", "Start", "End", "Note"],
+    vacations.map((v) => [v.id, v.repName, v.startDate, v.endDate, v.note || ""])
+  );
+
+  const paymentsSection = section("PAYMENTS",
+    ["ID", "Booking ID", "Amount", "Collected By", "Collected At", "Note"],
+    payments.map((p) => [
+      p.id, p.bookingId, p.amount.toFixed(2),
+      p.collectedBy, p.collectedAt, p.note || "",
+    ])
+  );
+
+  const expensesSection = section("EXPENSES",
+    ["ID", "Amount", "Paid By", "Concept", "Investment?", "Created At"],
+    expenses.map((e) => [
+      e.id, e.amount.toFixed(2), e.paidBy,
+      e.concept || "", e.isInvestment ? "yes" : "no", e.createdAt,
+    ])
+  );
+
+  const settlementsSection = section("SETTLEMENTS",
+    ["ID", "Settled At", "Chetos Collected", "Rodri Collected",
+     "Chetos Expenses", "Rodri Expenses", "Difference", "Note"],
+    settlements.map((s) => [
+      s.id, s.settledAt,
+      (s.chetosAmount || 0).toFixed(2),
+      (s.rodriAmount || 0).toFixed(2),
+      (s.chetosExpenses || 0).toFixed(2),
+      (s.rodriExpenses || 0).toFixed(2),
+      (s.difference || 0).toFixed(2),
+      s.note || "",
+    ])
+  );
+
+  return [meta, "", bookingsSection, "", vacationsSection, "",
+          paymentsSection, "", expensesSection, "", settlementsSection].join("\n");
+}
+
+// Backup reminder helpers (uses localStorage — per-device reminder) (NEW)
+const LAST_BACKUP_KEY = "rentalpro_last_backup_at";
+function getLastBackupAt() {
+  try { return localStorage.getItem(LAST_BACKUP_KEY); } catch { return null; }
+}
+function setLastBackupAt(iso) {
+  try { localStorage.setItem(LAST_BACKUP_KEY, iso); } catch { /* ignore */ }
 }
 
 // ─── useWindowWidth ───────────────────────────────────────────────────────────
@@ -392,8 +431,6 @@ function useWindowWidth() {
 }
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
-// Palette inspired by the Last Man Standing brand: forest green, sunshine
-// yellow, brick red. Green leads, yellow accents, red for danger/discounts.
 const C = {
   bg: "#fafaf6",
   surface: "#ffffff",
@@ -402,19 +439,19 @@ const C = {
   text: "#1c2620",
   textSub: "#5e6a62",
   textMuted: "#9aa39c",
-  accent: "#2d6a4f",         // forest green (primary)
-  accentDeep: "#1f4d39",     // deeper green for hover/header
-  accentSoft: "#e3f0e7",     // green tint for surfaces
-  sunshine: "#fbcf3c",       // brand yellow
-  sunshineSoft: "#fff4cc",   // soft yellow for highlights
-  brick: "#b73c2a",          // brand red (danger/discount)
+  accent: "#2d6a4f",
+  accentDeep: "#1f4d39",
+  accentSoft: "#e3f0e7",
+  sunshine: "#fbcf3c",
+  sunshineSoft: "#fff4cc",
+  brick: "#b73c2a",
   brickSoft: "#fbe7e3",
   danger: "#b73c2a",
   success: "#2d6a4f",
   warning: "#7a5800",
-  cap50: "#cfe9d6",          // <50% — soft green
-  cap80: "#ffe89a",          // 50–99% — warm yellow
-  cap100: "#f5c2b8",         // full — soft brick
+  cap50: "#cfe9d6",
+  cap80: "#ffe89a",
+  cap100: "#f5c2b8",
 };
 
 const T = {
@@ -440,17 +477,10 @@ const inp = (mobile) => ({
 
 function Label({ children }) {
   return (
-    <div
-      style={{
-        fontSize: 10,
-        letterSpacing: "0.08em",
-        color: C.textMuted,
-        textTransform: "uppercase",
-        fontFamily: T.sans,
-        marginBottom: 5,
-        fontWeight: 500,
-      }}
-    >
+    <div style={{
+      fontSize: 10, letterSpacing: "0.08em", color: C.textMuted,
+      textTransform: "uppercase", fontFamily: T.sans, marginBottom: 5, fontWeight: 500,
+    }}>
       {children}
     </div>
   );
@@ -462,14 +492,10 @@ function Field({ label, error, hint, children }) {
       {label && <Label>{label}</Label>}
       {children}
       {hint && !error && (
-        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, fontFamily: T.sans }}>
-          {hint}
-        </div>
+        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, fontFamily: T.sans }}>{hint}</div>
       )}
       {error && (
-        <div style={{ fontSize: 11, color: C.danger, marginTop: 4, fontFamily: T.sans }}>
-          {error}
-        </div>
+        <div style={{ fontSize: 11, color: C.danger, marginTop: 4, fontFamily: T.sans }}>{error}</div>
       )}
     </div>
   );
@@ -510,44 +536,24 @@ function Divider() {
   return <div style={{ borderTop: `1px solid ${C.border}`, margin: "16px 0" }} />;
 }
 
-// Confirm dialog
 function ConfirmDialog({ open, title, message, confirmLabel = "Confirm", danger, onConfirm, onCancel }) {
   if (!open) return null;
   return (
-    <div
-      onClick={onCancel}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-        padding: 16,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.surface,
-          border: `1px solid ${C.border}`,
-          borderRadius: 4,
-          padding: "20px 22px",
-          maxWidth: 380,
-          width: "100%",
-          fontFamily: T.sans,
-        }}
-      >
+    <div onClick={onCancel} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 100, padding: 16,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
+        padding: "20px 22px", maxWidth: 380, width: "100%", fontFamily: T.sans,
+      }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 8 }}>{title}</div>
         <div style={{ fontSize: 13, color: C.textSub, marginBottom: 18, lineHeight: 1.5 }}>{message}</div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <Btn onClick={onCancel} variant="ghost">Cancel</Btn>
-          <Btn
-            onClick={onConfirm}
-            variant={danger ? "danger" : "primary"}
-            style={danger ? { background: C.danger, color: C.surface, borderColor: C.danger } : undefined}
-          >
+          <Btn onClick={onConfirm} variant={danger ? "danger" : "primary"}
+            style={danger ? { background: C.danger, color: C.surface, borderColor: C.danger } : undefined}>
             {confirmLabel}
           </Btn>
         </div>
@@ -715,40 +721,24 @@ function SettingsPanel({
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <Field label="Starting General ($)">
-              <input
-                type="number"
-                step="0.01"
-                style={inputStyle}
+              <input type="number" step="0.01" style={inputStyle}
                 value={settingsDraft.startingGeneral ?? 0}
-                onChange={(e) => setSettingsDraft((d) => ({ ...d, startingGeneral: parseFloat(e.target.value) || 0 }))}
-              />
+                onChange={(e) => setSettingsDraft((d) => ({ ...d, startingGeneral: parseFloat(e.target.value) || 0 }))} />
             </Field>
             <Field label="Investment ($)">
-              <input
-                type="number"
-                step="0.01"
-                style={inputStyle}
+              <input type="number" step="0.01" style={inputStyle}
                 value={settingsDraft.investment ?? 0}
-                onChange={(e) => setSettingsDraft((d) => ({ ...d, investment: parseFloat(e.target.value) || 0 }))}
-              />
+                onChange={(e) => setSettingsDraft((d) => ({ ...d, investment: parseFloat(e.target.value) || 0 }))} />
             </Field>
             <Field label="Starting Chetos ($)">
-              <input
-                type="number"
-                step="0.01"
-                style={inputStyle}
+              <input type="number" step="0.01" style={inputStyle}
                 value={settingsDraft.startingChetos ?? 0}
-                onChange={(e) => setSettingsDraft((d) => ({ ...d, startingChetos: parseFloat(e.target.value) || 0 }))}
-              />
+                onChange={(e) => setSettingsDraft((d) => ({ ...d, startingChetos: parseFloat(e.target.value) || 0 }))} />
             </Field>
             <Field label="Starting Rodri ($)">
-              <input
-                type="number"
-                step="0.01"
-                style={inputStyle}
+              <input type="number" step="0.01" style={inputStyle}
                 value={settingsDraft.startingRodri ?? 0}
-                onChange={(e) => setSettingsDraft((d) => ({ ...d, startingRodri: parseFloat(e.target.value) || 0 }))}
-              />
+                onChange={(e) => setSettingsDraft((d) => ({ ...d, startingRodri: parseFloat(e.target.value) || 0 }))} />
             </Field>
           </div>
 
@@ -935,10 +925,11 @@ function BookingForm({
   );
 }
 
-// ─── Calendar ─────────────────────────────────────────────────────────────────
+// ─── Calendar (MODIFIED: accepts vacations and shows them on days) ────────────
 function CalendarView({
   isMobile, months, safeMonth, setCalMonth,
   startDate, endDate, bookings, itemDefs, dayStrain, strainBg,
+  vacations = [],
 }) {
   const am = months[safeMonth];
   return (
@@ -984,6 +975,7 @@ function CalendarView({
                     const isToday = ds === today;
                     const strain = dayStrain(ds);
                     const dayBkgs = bookings.filter((b) => b.startDate <= ds && b.endDate >= ds);
+                    const dayVacs = !oor && !isPast ? vacationsOnDate(vacations, ds) : [];
                     return (
                       <div key={day} style={{
                         background: oor || isPast ? C.bg : strainBg(strain),
@@ -994,6 +986,26 @@ function CalendarView({
                         opacity: oor ? 0.3 : isPast ? 0.5 : 1,
                       }}>
                         <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: isToday ? 700 : 500, color: C.text, fontFamily: T.sans, marginBottom: 3 }}>{day}</div>
+                        {dayVacs.length > 0 && (
+                          <div title={dayVacs.map((v) => `${v.repName} on vacation`).join(", ")}
+                            style={{
+                              background: C.sunshineSoft,
+                              border: `1px solid ${C.sunshine}`,
+                              color: C.warning,
+                              fontSize: isMobile ? 9 : 10,
+                              fontWeight: 700,
+                              fontFamily: T.sans,
+                              borderRadius: 2,
+                              padding: isMobile ? "1px 3px" : "1px 4px",
+                              marginBottom: 3,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              lineHeight: 1.2,
+                            }}>
+                            🌴 {dayVacs.map((v) => v.repName).join(", ")}
+                          </div>
+                        )}
                         {!oor && !isPast && strain > 0 && itemDefs.map((it) => {
                           const used = usedOnDate(bookings, ds, it.id);
                           if (!used) return null;
@@ -1027,6 +1039,10 @@ function CalendarView({
                       <span style={{ fontSize: 10, color: C.textMuted, fontFamily: T.sans }}>{x.l}</span>
                     </div>
                   ))}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <div style={{ width: 10, height: 10, background: C.sunshineSoft, border: `1px solid ${C.sunshine}`, borderRadius: 1 }} />
+                    <span style={{ fontSize: 10, color: C.textMuted, fontFamily: T.sans }}>🌴 Rep on vacation</span>
+                  </div>
                   <span style={{ fontSize: 10, color: C.textMuted, fontFamily: T.sans, marginLeft: "auto" }}>
                     Color reflects highest item utilization
                   </span>
@@ -1263,7 +1279,6 @@ function MarkDoneDialog({ open, booking, onConfirm, onCancel }) {
   const [collectedBy, setCollectedBy] = useState("rodri");
   const [err, setErr] = useState("");
 
-  // Reset whenever opened with a new booking
   useEffect(() => {
     if (open && booking) {
       setAmount(booking.totalCost.toFixed(2));
@@ -1276,29 +1291,20 @@ function MarkDoneDialog({ open, booking, onConfirm, onCancel }) {
 
   function submit() {
     const a = parseFloat(amount);
-    if (isNaN(a) || a < 0) {
-      setErr("Enter a valid amount.");
-      return;
-    }
+    if (isNaN(a) || a < 0) { setErr("Enter a valid amount."); return; }
     onConfirm({ amount: a, collectedBy });
   }
 
   return (
-    <div
-      onClick={onCancel}
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 100, padding: 16,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
-          padding: "20px 22px", maxWidth: 420, width: "100%", fontFamily: T.sans,
-        }}
-      >
+    <div onClick={onCancel} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 100, padding: 16,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
+        padding: "20px 22px", maxWidth: 420, width: "100%", fontFamily: T.sans,
+      }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 4 }}>
           Mark Booking Done
         </div>
@@ -1307,15 +1313,8 @@ function MarkDoneDialog({ open, booking, onConfirm, onCancel }) {
         </div>
 
         <Field label="Amount Collected ($)">
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            style={inp(false)}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            autoFocus
-          />
+          <input type="number" min="0" step="0.01" style={inp(false)}
+            value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
         </Field>
 
         <Field label="Collected By">
@@ -1324,18 +1323,14 @@ function MarkDoneDialog({ open, booking, onConfirm, onCancel }) {
               { id: "chetos", label: "Chetos" },
               { id: "rodri", label: "Rodri" },
             ].map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setCollectedBy(p.id)}
+              <button key={p.id} type="button" onClick={() => setCollectedBy(p.id)}
                 style={{
                   flex: 1, padding: "10px", border: "none", cursor: "pointer",
                   fontFamily: T.sans, fontSize: 13, fontWeight: 600,
                   background: collectedBy === p.id ? C.accent : C.surface,
                   color: collectedBy === p.id ? "#fff" : C.textSub,
                   transition: "all 0.15s",
-                }}
-              >
+                }}>
                 {p.label}
               </button>
             ))}
@@ -1363,11 +1358,8 @@ function AddExpenseDialog({ open, onConfirm, onCancel }) {
 
   useEffect(() => {
     if (open) {
-      setAmount("");
-      setPaidBy("rodri");
-      setConcept("");
-      setIsInvestment(false);
-      setErr("");
+      setAmount(""); setPaidBy("rodri"); setConcept("");
+      setIsInvestment(false); setErr("");
     }
   }, [open]);
 
@@ -1375,44 +1367,27 @@ function AddExpenseDialog({ open, onConfirm, onCancel }) {
 
   function submit() {
     const a = parseFloat(amount);
-    if (isNaN(a) || a <= 0) {
-      setErr("Enter an amount greater than zero.");
-      return;
-    }
+    if (isNaN(a) || a <= 0) { setErr("Enter an amount greater than zero."); return; }
     onConfirm({ amount: a, paidBy, concept: concept.trim(), isInvestment });
   }
 
   return (
-    <div
-      onClick={onCancel}
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 100, padding: 16,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
-          padding: "20px 22px", maxWidth: 420, width: "100%", fontFamily: T.sans,
-        }}
-      >
+    <div onClick={onCancel} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 100, padding: 16,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
+        padding: "20px 22px", maxWidth: 420, width: "100%", fontFamily: T.sans,
+      }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 12 }}>
           Add Expense
         </div>
 
         <Field label="Amount ($)">
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            style={inp(false)}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            autoFocus
-          />
+          <input type="number" min="0" step="0.01" placeholder="0.00" style={inp(false)}
+            value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
         </Field>
 
         <Field label="Paid By">
@@ -1421,18 +1396,14 @@ function AddExpenseDialog({ open, onConfirm, onCancel }) {
               { id: "chetos", label: "Chetos" },
               { id: "rodri", label: "Rodri" },
             ].map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setPaidBy(p.id)}
+              <button key={p.id} type="button" onClick={() => setPaidBy(p.id)}
                 style={{
                   flex: 1, padding: "10px", border: "none", cursor: "pointer",
                   fontFamily: T.sans, fontSize: 13, fontWeight: 600,
                   background: paidBy === p.id ? C.accent : C.surface,
                   color: paidBy === p.id ? "#fff" : C.textSub,
                   transition: "all 0.15s",
-                }}
-              >
+                }}>
                 {p.label}
               </button>
             ))}
@@ -1440,34 +1411,24 @@ function AddExpenseDialog({ open, onConfirm, onCancel }) {
         </Field>
 
         <Field label="Concept (optional)" hint="e.g. gas, new chairs, repairs">
-          <input
-            type="text"
-            placeholder="What was this for?"
-            style={inp(false)}
-            value={concept}
-            onChange={(e) => setConcept(e.target.value)}
-          />
+          <input type="text" placeholder="What was this for?" style={inp(false)}
+            value={concept} onChange={(e) => setConcept(e.target.value)} />
         </Field>
 
-        <div
-          onClick={() => setIsInvestment(!isInvestment)}
+        <div onClick={() => setIsInvestment(!isInvestment)}
           style={{
             display: "flex", alignItems: "center", gap: 10,
             padding: "10px 12px",
             background: isInvestment ? C.sunshineSoft : C.bg,
             border: `1px solid ${isInvestment ? C.sunshine : C.border}`,
-            borderRadius: 3,
-            cursor: "pointer",
-            marginBottom: 14,
-          }}
-        >
+            borderRadius: 3, cursor: "pointer", marginBottom: 14,
+          }}>
           <div style={{
             width: 18, height: 18, borderRadius: 3,
             border: `2px solid ${isInvestment ? C.accent : C.borderStrong}`,
             background: isInvestment ? C.accent : C.surface,
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff", fontSize: 12, fontWeight: 800,
-            flexShrink: 0,
+            color: "#fff", fontSize: 12, fontWeight: 800, flexShrink: 0,
           }}>
             {isInvestment ? "✓" : ""}
           </div>
@@ -1500,8 +1461,6 @@ function SettlementDialog({
   if (!open) return null;
   const diff = chetosNet - rodriNet;
   const owesAmount = Math.abs(diff) / 2;
-  // If Chetos has higher net (more in pocket), Chetos pays Rodri.
-  // If Rodri has higher net, Rodri pays Chetos.
   const whoPays =
     Math.abs(diff) < 0.005 ? "Already even"
     : diff > 0 ? "Chetos pays Rodri"
@@ -1516,21 +1475,15 @@ function SettlementDialog({
   );
 
   return (
-    <div
-      onClick={onCancel}
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 100, padding: 16,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
-          padding: "20px 22px", maxWidth: 460, width: "100%", fontFamily: T.sans,
-        }}
-      >
+    <div onClick={onCancel} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 100, padding: 16,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
+        padding: "20px 22px", maxWidth: 460, width: "100%", fontFamily: T.sans,
+      }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 12 }}>
           Settle Up?
         </div>
@@ -1567,6 +1520,167 @@ function SettlementDialog({
   );
 }
 
+// ─── Vacations Panel (NEW) ────────────────────────────────────────────────────
+function VacationsPanel({ isMobile, vacations, onAdd, onDelete }) {
+  const inputStyle = inp(isMobile);
+  const [open, setOpen] = useState(false);
+  const [repName, setRepName] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [note, setNote] = useState("");
+  const [err, setErr] = useState("");
+
+  const todayDs = new Date().toISOString().split("T")[0];
+
+  const sorted = useMemo(() => {
+    const list = [...vacations];
+    list.sort((a, b) => {
+      const aPast = a.endDate < todayDs;
+      const bPast = b.endDate < todayDs;
+      if (aPast !== bPast) return aPast ? 1 : -1;
+      return a.startDate.localeCompare(b.startDate);
+    });
+    return list;
+  }, [vacations, todayDs]);
+
+  function reset() {
+    setRepName(""); setStartDate(""); setEndDate(""); setNote(""); setErr("");
+  }
+  function submit() {
+    const name = repName.trim();
+    if (!name) { setErr("Rep name required."); return; }
+    if (!startDate || !endDate) { setErr("Both dates required."); return; }
+    if (startDate > endDate) { setErr("End must be on or after start."); return; }
+    onAdd({ repName: name, startDate, endDate, note: note.trim() });
+    reset();
+    setOpen(false);
+  }
+
+  return (
+    <div style={{
+      background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
+      padding: isMobile ? "14px 14px" : "16px 18px", marginBottom: 14,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: T.sans, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+          🌴 Sales Rep Vacations
+        </div>
+        <Btn small variant={open ? "ghost" : "default"} onClick={() => { setOpen(!open); if (open) reset(); }}>
+          {open ? "Cancel" : "+ Add"}
+        </Btn>
+      </div>
+
+      {open && (
+        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 3, padding: 12, marginBottom: 12 }}>
+          <Field label="Rep Name">
+            <input style={inputStyle} placeholder="Type any name" value={repName} onChange={(e) => setRepName(e.target.value)} />
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              <button type="button" onClick={() => setRepName("Chetos")}
+                style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${C.border}`, background: repName === "Chetos" ? C.accentSoft : C.surface, color: C.textSub, borderRadius: 3, cursor: "pointer", fontFamily: T.sans }}>
+                Chetos
+              </button>
+              <button type="button" onClick={() => setRepName("Rodri")}
+                style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${C.border}`, background: repName === "Rodri" ? C.accentSoft : C.surface, color: C.textSub, borderRadius: 3, cursor: "pointer", fontFamily: T.sans }}>
+                Rodri
+              </button>
+            </div>
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+            <Field label="Start">
+              <input type="date" style={inputStyle} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </Field>
+            <Field label="End">
+              <input type="date" style={inputStyle} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </Field>
+          </div>
+          <Field label="Note (optional)">
+            <input style={inputStyle} placeholder="e.g. Family trip — Rodri covering" value={note} onChange={(e) => setNote(e.target.value)} />
+          </Field>
+          {err && <div style={{ fontSize: 12, color: C.danger, marginBottom: 8 }}>{err}</div>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <Btn onClick={() => { reset(); setOpen(false); }} variant="ghost">Cancel</Btn>
+            <Btn onClick={submit} variant="primary">Save Vacation</Btn>
+          </div>
+        </div>
+      )}
+
+      {sorted.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans, padding: "8px 0" }}>
+          No vacations on the books. Add one to flag coverage needs on the calendar.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {sorted.map((v) => {
+            const isPast = v.endDate < todayDs;
+            const isActive = v.startDate <= todayDs && v.endDate >= todayDs;
+            return (
+              <div key={v.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 10px", borderRadius: 3,
+                background: isActive ? C.sunshineSoft : C.bg,
+                border: `1px solid ${isActive ? C.sunshine : C.border}`,
+                opacity: isPast ? 0.55 : 1,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: T.sans }}>
+                    {v.repName}
+                    {isActive && <span style={{ fontSize: 10, marginLeft: 8, padding: "1px 6px", background: C.sunshine, color: C.accentDeep, borderRadius: 2, fontWeight: 700 }}>OUT NOW</span>}
+                    {isPast && <span style={{ fontSize: 10, marginLeft: 8, color: C.textMuted }}>(past)</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textSub, fontFamily: T.sans, marginTop: 1 }}>
+                    {fmtDateShort(v.startDate)} – {fmtDateShort(v.endDate)}
+                    {v.note && <span style={{ color: C.textMuted }}> · {v.note}</span>}
+                  </div>
+                </div>
+                <Btn small variant="ghost" onClick={() => onDelete(v)}>✕</Btn>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Backup Panel (NEW) ───────────────────────────────────────────────────────
+function BackupPanel({ isMobile, onBackup, lastBackupAt }) {
+  const days = lastBackupAt
+    ? Math.floor((Date.now() - new Date(lastBackupAt).getTime()) / 86400000)
+    : null;
+  const stale = days === null || days >= 7;
+  return (
+    <div style={{
+      background: stale ? C.sunshineSoft : C.surface,
+      border: `1px solid ${stale ? C.sunshine : C.border}`,
+      borderRadius: 4, padding: isMobile ? "14px" : "16px 18px",
+      marginBottom: 14,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: T.sans, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            💾 Weekly Backup
+          </div>
+          <div style={{ fontSize: 12, color: C.textSub, fontFamily: T.sans, marginTop: 4 }}>
+            {lastBackupAt
+              ? <>Last backup: <strong>{fmtDate(lastBackupAt.split("T")[0])}</strong>{days != null && <> ({days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`})</>}</>
+              : "No backup yet. Export now to start the weekly cycle."}
+          </div>
+          {stale && (
+            <div style={{ fontSize: 11, color: C.warning, fontFamily: T.sans, marginTop: 6, fontWeight: 600 }}>
+              ⚠ It's been 7+ days — time to back up.
+            </div>
+          )}
+        </div>
+        <Btn variant="primary" onClick={onBackup}>Export Full Backup</Btn>
+      </div>
+      <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginTop: 10, lineHeight: 1.5 }}>
+        Downloads a single CSV with all bookings, vacations, payments, expenses, and settlements.
+        Keep these files in a safe place (Google Drive, Dropbox, email to yourself).
+      </div>
+    </div>
+  );
+}
+
 // ─── Accounts View ────────────────────────────────────────────────────────────
 function AccountsView({
   isMobile,
@@ -1589,6 +1703,11 @@ function AccountsView({
   onDeleteExpense,
   onUpdateInvestment,
   settingsPanelProps,
+  vacations,
+  onAddVacation,
+  onDeleteVacation,
+  onBackup,
+  lastBackupAt,
 }) {
   const [editingInv, setEditingInv] = useState(false);
   const [invDraft, setInvDraft] = useState("");
@@ -1596,16 +1715,12 @@ function AccountsView({
   const investment = settings.investment || 0;
   const roiX = investment > 0 ? generalBalance / investment : 0;
   const roiPct = investment > 0 ? ((generalBalance - investment) / investment) * 100 : 0;
-  // Projected = if every active booking gets paid in full, what does General become?
   const projectedGeneral = generalBalance + projectedRevenue;
   const projRoiX = investment > 0 ? projectedGeneral / investment : 0;
   const projRoiPct = investment > 0 ? ((projectedGeneral - investment) / investment) * 100 : 0;
   const hasProjection = projectedRevenue > 0;
 
-  function startEdit() {
-    setInvDraft(String(investment));
-    setEditingInv(true);
-  }
+  function startEdit() { setInvDraft(String(investment)); setEditingInv(true); }
   function saveInv() {
     const v = parseFloat(invDraft);
     if (isNaN(v) || v < 0) return;
@@ -1625,14 +1740,11 @@ function AccountsView({
   return (
     <div style={{ padding: isMobile ? "14px" : "20px 24px" }}>
       {/* Top row: General + Investment + ROI */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: 12,
-          marginBottom: 14,
-        }}
-      >
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+        gap: 12, marginBottom: 14,
+      }}>
         {/* General Account */}
         <div style={{ ...card, background: C.accentDeep, color: "#fff", border: `1px solid ${C.accentDeep}` }}>
           <div style={{ fontSize: 10, letterSpacing: "0.08em", color: C.sunshine, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>
@@ -1660,13 +1772,8 @@ function AccountsView({
           </div>
           {editingInv ? (
             <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-              <input
-                type="number"
-                style={{ ...inp(false), maxWidth: 140 }}
-                value={invDraft}
-                autoFocus
-                onChange={(e) => setInvDraft(e.target.value)}
-              />
+              <input type="number" style={{ ...inp(false), maxWidth: 140 }} value={invDraft} autoFocus
+                onChange={(e) => setInvDraft(e.target.value)} />
               <Btn small variant="primary" onClick={saveInv}>Save</Btn>
               <Btn small variant="ghost" onClick={() => setEditingInv(false)}>Cancel</Btn>
             </div>
@@ -1677,18 +1784,16 @@ function AccountsView({
           )}
 
           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
-            {/* Header row */}
             <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr", gap: 8, marginBottom: 6 }}>
               <span />
               <div style={{ fontSize: 9, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
                 Actual
               </div>
-              <div style={{ fontSize: 9, color: C.sunshine === C.sunshine ? C.warning : C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
+              <div style={{ fontSize: 9, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
                 Projected
               </div>
             </div>
 
-            {/* Return row */}
             <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr", gap: 8, alignItems: "baseline", marginBottom: 4 }}>
               <div style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
                 Return
@@ -1701,7 +1806,6 @@ function AccountsView({
               </div>
             </div>
 
-            {/* Margin row */}
             <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr", gap: 8, alignItems: "baseline" }}>
               <div style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
                 Margin
@@ -1723,15 +1827,12 @@ function AccountsView({
         </div>
       </div>
 
-      {/* Personal balances with breakdown */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: 12,
-          marginBottom: 14,
-        }}
-      >
+      {/* Personal balances */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+        gap: 12, marginBottom: 14,
+      }}>
         {[
           { name: "Chetos", collected: chetosCollected, expensesAmt: chetosExpensesAmt, net: chetosNet, starting: settings.startingChetos || 0 },
           { name: "Rodri", collected: rodriCollected, expensesAmt: rodriExpensesAmt, net: rodriNet, starting: settings.startingRodri || 0 },
@@ -1756,15 +1857,11 @@ function AccountsView({
         ))}
       </div>
 
-      {/* Settle Up button row */}
+      {/* Action buttons */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <Btn variant="default" onClick={onAddExpense}>+ Add Expense</Btn>
-        <Btn
-          variant="primary"
-          onClick={onSettle}
-          disabled={!canSettle}
-          style={canSettle ? { background: C.sunshine, color: C.accentDeep, borderColor: C.sunshine, fontWeight: 700 } : undefined}
-        >
+        <Btn variant="primary" onClick={onSettle} disabled={!canSettle}
+          style={canSettle ? { background: C.sunshine, color: C.accentDeep, borderColor: C.sunshine, fontWeight: 700 } : undefined}>
           ⚖ Settle Up
         </Btn>
       </div>
@@ -1861,7 +1958,22 @@ function AccountsView({
         )}
       </div>
 
-      {/* Settings — moved here from the booking form sidebar */}
+      {/* NEW: Vacations panel */}
+      <div style={{ marginTop: 18 }}>
+        <VacationsPanel
+          isMobile={isMobile}
+          vacations={vacations}
+          onAdd={onAddVacation}
+          onDelete={onDeleteVacation}
+        />
+      </div>
+
+      {/* NEW: Backup panel */}
+      <div style={{ marginTop: 4 }}>
+        <BackupPanel isMobile={isMobile} onBackup={onBackup} lastBackupAt={lastBackupAt} />
+      </div>
+
+      {/* Settings */}
       <div style={{ marginTop: 18 }}>
         <SettingsPanel {...settingsPanelProps} />
       </div>
@@ -1872,66 +1984,36 @@ function AccountsView({
 // ─── Header ───────────────────────────────────────────────────────────────────
 function Header({ isMobile, bookings, totalRevenue }) {
   return (
-    <div
-      style={{
-        background: C.accentDeep,
-        borderBottom: `3px solid ${C.sunshine}`,
-        padding: isMobile ? "12px 16px" : "14px 24px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        color: "#fff",
-      }}
-    >
+    <div style={{
+      background: C.accentDeep,
+      borderBottom: `3px solid ${C.sunshine}`,
+      padding: isMobile ? "12px 16px" : "14px 24px",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      color: "#fff",
+    }}>
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, minWidth: 0 }}>
-        {/* Logo mark: yellow circle with chair glyph */}
-        <div
-          style={{
-            width: isMobile ? 34 : 40,
-            height: isMobile ? 34 : 40,
-            borderRadius: "50%",
-            background: C.sunshine,
-            color: C.accentDeep,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: isMobile ? 18 : 22,
-            fontWeight: 800,
-            flexShrink: 0,
-            boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
-          }}
-          aria-label="Last Man Standing logo"
-        >
+        <div style={{
+          width: isMobile ? 34 : 40, height: isMobile ? 34 : 40,
+          borderRadius: "50%", background: C.sunshine, color: C.accentDeep,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: isMobile ? 18 : 22, fontWeight: 800,
+          flexShrink: 0, boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
+        }} aria-label="Last Man Standing logo">
           🪑
         </div>
         <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: isMobile ? 15 : 19,
-              fontWeight: 800,
-              fontFamily: T.sans,
-              letterSpacing: "0.02em",
-              textTransform: "uppercase",
-              lineHeight: 1.1,
-              color: "#fff",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
+          <div style={{
+            fontSize: isMobile ? 15 : 19, fontWeight: 800, fontFamily: T.sans,
+            letterSpacing: "0.02em", textTransform: "uppercase", lineHeight: 1.1,
+            color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
             Last Man Standing
           </div>
           {!isMobile && (
-            <div
-              style={{
-                fontSize: 11,
-                color: C.sunshineSoft,
-                fontFamily: T.sans,
-                marginTop: 2,
-                fontStyle: "italic",
-                opacity: 0.95,
-              }}
-            >
+            <div style={{
+              fontSize: 11, color: C.sunshineSoft, fontFamily: T.sans,
+              marginTop: 2, fontStyle: "italic", opacity: 0.95,
+            }}>
               Because when the music stops, your chairs better be ready.
             </div>
           )}
@@ -1972,6 +2054,31 @@ function TabBar({ active, onChange, tabs, bottom }) {
   );
 }
 
+// ─── Backup Reminder Banner (NEW) ─────────────────────────────────────────────
+function BackupReminderBanner({ isMobile, lastBackupAt, onBackup, onDismiss }) {
+  const days = lastBackupAt
+    ? Math.floor((Date.now() - new Date(lastBackupAt).getTime()) / 86400000)
+    : null;
+  if (days !== null && days < 7) return null;
+  return (
+    <div style={{
+      background: C.sunshineSoft,
+      borderBottom: `1px solid ${C.sunshine}`,
+      padding: isMobile ? "8px 14px" : "8px 24px",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      gap: 10, fontFamily: T.sans,
+    }}>
+      <div style={{ fontSize: isMobile ? 11 : 12, color: C.warning, fontWeight: 600, minWidth: 0 }}>
+        💾 {lastBackupAt ? `Last backup ${days} day${days === 1 ? "" : "s"} ago.` : "No backup yet."} Time to export.
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <Btn small variant="primary" onClick={onBackup}>Back up now</Btn>
+        <Btn small variant="ghost" onClick={onDismiss}>Later</Btn>
+      </div>
+    </div>
+  );
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const width = useWindowWidth();
@@ -1981,6 +2088,9 @@ export default function App() {
   const [payments, setPayments] = useState([]);
   const [settlements, setSettlements] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [vacations, setVacations] = useState([]);  // NEW
+  const [lastBackupAt, setLastBackupAtState] = useState(() => getLastBackupAt());  // NEW
+  const [backupBannerDismissed, setBackupBannerDismissed] = useState(false);  // NEW
   const [settings, setSettings] = useState(() => {
     const s = { ...DEFAULT_SETTINGS };
     if (!s.items) s.items = DEFAULT_ITEMS;
@@ -1989,12 +2099,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  // Mark-done dialog and settle dialog
-  const [doneDialog, setDoneDialog] = useState(null); // booking object or null
+  const [doneDialog, setDoneDialog] = useState(null);
   const [settleDialog, setSettleDialog] = useState(false);
   const [expenseDialog, setExpenseDialog] = useState(false);
 
-  // Bookings list status filter: all / active / done
   const [filterStatus, setFilterStatus] = useState("active");
 
   // Load all data from Supabase on mount
@@ -2002,18 +2110,20 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const [bks, st, pmts, stls, exps] = await Promise.all([
+        const [bks, st, pmts, stls, exps, vcs] = await Promise.all([
           fetchAllBookings(),
           fetchSettings(),
           fetchAllPayments(),
           fetchAllSettlements(),
           fetchAllExpenses(),
+          fetchAllVacations(),  // NEW
         ]);
         if (cancelled) return;
         setBookings(bks);
         setPayments(pmts);
         setSettlements(stls);
         setExpenses(exps);
+        setVacations(vcs);  // NEW
         if (st) {
           setSettings({
             ...DEFAULT_SETTINGS,
@@ -2063,9 +2173,6 @@ export default function App() {
 
   const setForm = useCallback((patch) => setFormRaw((p) => ({ ...p, ...patch })), []);
 
-  // Persist a single booking change (upsert) or removal.
-  // Caller passes the new full list (for instant UI), plus optional op metadata
-  // so we know what to write to the DB.
   const saveBookings = useCallback((newList, op) => {
     setBookings(newList);
     if (!op) return;
@@ -2220,9 +2327,39 @@ export default function App() {
     downloadCSV(csv, `bookings-${stamp}.csv`);
   }
 
-  function requestMarkDone(b) {
-    setDoneDialog(b);
+  // NEW: Vacation handlers
+  function addVacation({ repName, startDate: s, endDate: e, note }) {
+    const v = { id: genId(), repName, startDate: s, endDate: e, note: note || "" };
+    setVacations((list) => [...list, v]);
+    upsertVacationDB(v);
   }
+  function requestDeleteVacation(v) {
+    setConfirmState({
+      title: "Delete vacation?",
+      message: `Remove ${v.repName}'s vacation (${fmtDateShort(v.startDate)} – ${fmtDateShort(v.endDate)})?`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => {
+        setVacations((list) => list.filter((x) => x.id !== v.id));
+        deleteVacationDB(v.id);
+        setConfirmState(null);
+      },
+    });
+  }
+
+  // NEW: Full backup
+  function runFullBackup() {
+    const csv = buildBackupCSV({
+      bookings, vacations, payments, settlements, expenses, itemDefs,
+    });
+    const stamp = new Date().toISOString().split("T")[0];
+    downloadCSV(csv, `lms-backup-${stamp}.csv`);
+    const nowIso = new Date().toISOString();
+    setLastBackupAt(nowIso);
+    setLastBackupAtState(nowIso);
+  }
+
+  function requestMarkDone(b) { setDoneDialog(b); }
   async function confirmMarkDone({ amount, collectedBy }) {
     const b = doneDialog;
     if (!b) return;
@@ -2234,30 +2371,22 @@ export default function App() {
       collectedAt: new Date().toISOString(),
       note: "",
     };
-    // Optimistic UI updates
     setPayments((p) => [...p, payment]);
     setBookings((bs) => bs.map((x) => (x.id === b.id ? { ...x, status: "done" } : x)));
     setDoneDialog(null);
-    // Persist
     await Promise.all([addPaymentDB(payment), setBookingStatusDB(b.id, "done")]);
   }
 
-  function requestAddExpense() {
-    setExpenseDialog(true);
-  }
+  function requestAddExpense() { setExpenseDialog(true); }
   async function confirmAddExpense({ amount, paidBy, concept, isInvestment }) {
     const expense = {
       id: genId(),
-      amount,
-      paidBy,
-      concept,
-      isInvestment,
+      amount, paidBy, concept, isInvestment,
       createdAt: new Date().toISOString(),
     };
     setExpenses((xs) => [...xs, expense]);
     setExpenseDialog(false);
     const writes = [addExpenseDB(expense)];
-    // If flagged, bump investment in settings
     if (isInvestment) {
       const newSettings = { ...settings, investment: (settings.investment || 0) + amount };
       setSettings(newSettings);
@@ -2291,8 +2420,6 @@ export default function App() {
       difference: chetosNet - rodriNet,
       note: "",
     };
-    // Reset starting balances to zero (they've been "absorbed" by the settlement record).
-    // Going forward, balances will accrue only from new payments after this settlement.
     const newSettings = { ...settings, startingChetos: 0, startingRodri: 0 };
     setSettings(newSettings);
     setSettlements((s) => [settlement, ...s]);
@@ -2313,21 +2440,14 @@ export default function App() {
     : null;
   const totalRevenue = bookings.reduce((s, b) => s + b.totalCost, 0);
 
-  // ── Account balances ──
-  // Filter to "since last settlement" for things that reset on settle.
+  // Account balances
   const lastSettlementAt = settlements.length > 0 ? settlements[0].settledAt : null;
-
   const totalCollected = payments.reduce((s, p) => s + p.amount, 0);
   const expensesSinceSettle = lastSettlementAt
     ? expenses.filter((e) => e.createdAt > lastSettlementAt)
     : expenses;
   const totalExpenses = expensesSinceSettle.reduce((s, e) => s + e.amount, 0);
-
-  // General balance: starting + ALL collected ever. Pure revenue counter.
-  // Expenses never reduce it — they're paid out of personal pockets and reconciled at settle-up.
   const generalBalance = (settings.startingGeneral || 0) + totalCollected;
-
-  // Per-partner: collected and expenses since last settle (these reset on settle).
   const paymentsSinceSettle = lastSettlementAt
     ? payments.filter((p) => p.collectedAt > lastSettlementAt)
     : payments;
@@ -2345,12 +2465,10 @@ export default function App() {
     .filter((e) => e.paidBy === "rodri")
     .reduce((s, e) => s + e.amount, 0);
 
-  // Net = collected − expenses (+ starting). Positive = holding cash; negative = owed money.
   const chetosNet = (settings.startingChetos || 0) + chetosCollected - chetosExpensesAmt;
   const rodriNet = (settings.startingRodri || 0) + rodriCollected - rodriExpensesAmt;
 
-  // Projected revenue: sum of totalCost for all active (not yet done) bookings.
-  // This represents money we expect to collect if all upcoming bookings pay in full.
+  // Projected revenue from active bookings (preserved from your version)
   const projectedRevenue = bookings
     .filter((b) => (b.status || "active") === "active")
     .reduce((s, b) => s + b.totalCost, 0);
@@ -2385,6 +2503,7 @@ export default function App() {
   const calendarProps = {
     isMobile, months, safeMonth, setCalMonth,
     startDate, endDate, bookings, itemDefs, dayStrain, strainBg,
+    vacations,  // NEW
   };
   const listProps = {
     isMobile, bookings, itemDefs,
@@ -2406,6 +2525,12 @@ export default function App() {
     onDeleteExpense: requestDeleteExpense,
     onUpdateInvestment: updateInvestment,
     settingsPanelProps,
+    // NEW:
+    vacations,
+    onAddVacation: addVacation,
+    onDeleteVacation: requestDeleteVacation,
+    onBackup: runFullBackup,
+    lastBackupAt,
   };
 
   if (loading) {
@@ -2444,6 +2569,14 @@ export default function App() {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, color: C.text, paddingBottom: 64 }}>
         <Header isMobile={isMobile} bookings={bookings} totalRevenue={totalRevenue} />
+        {!backupBannerDismissed && (
+          <BackupReminderBanner
+            isMobile={isMobile}
+            lastBackupAt={lastBackupAt}
+            onBackup={runFullBackup}
+            onDismiss={() => setBackupBannerDismissed(true)}
+          />
+        )}
         {mobileTab === "calendar" && <CalendarView {...calendarProps} />}
         {mobileTab === "list" && <BookingsList {...listProps} />}
         {mobileTab === "accounts" && <AccountsView {...accountsProps} />}
@@ -2493,6 +2626,14 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, display: "flex", flexDirection: "column" }}>
       <Header isMobile={isMobile} bookings={bookings} totalRevenue={totalRevenue} />
+      {!backupBannerDismissed && (
+        <BackupReminderBanner
+          isMobile={isMobile}
+          lastBackupAt={lastBackupAt}
+          onBackup={runFullBackup}
+          onDismiss={() => setBackupBannerDismissed(true)}
+        />
+      )}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div style={{ width: 340, minWidth: 300, background: C.bg, borderRight: `1px solid ${C.border}`, overflowY: "auto" }}>
           <BookingForm {...bookingFormProps} />
