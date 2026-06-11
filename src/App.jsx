@@ -97,10 +97,22 @@ async function deleteBookingDB(id) {
 }
 
 async function fetchSettings() {
-  const { data, error } = await supabase
-    .from("settings").select("data").eq("id", 1).maybeSingle();
-  if (error) { console.error("fetchSettings error:", error); return null; }
-  return data?.data || null;
+  // Returns { ok: true, data: <obj-or-null> } on success.
+  // Returns { ok: false, error } on failure.
+  // This distinction is CRITICAL — if we can't tell "row doesn't exist"
+  // from "network failed", we risk overwriting real data with defaults.
+  try {
+    const { data, error } = await supabase
+      .from("settings").select("data").eq("id", 1).maybeSingle();
+    if (error) {
+      console.error("fetchSettings error:", error);
+      return { ok: false, error };
+    }
+    return { ok: true, data: data?.data || null };
+  } catch (e) {
+    console.error("fetchSettings threw:", e);
+    return { ok: false, error: e };
+  }
 }
 
 async function saveSettingsDB(settings) {
@@ -331,7 +343,7 @@ function vacationsOnDate(vacations, ds) {
 }
 
 // Build a single CSV with all data stacked in labeled sections (NEW)
-function buildBackupCSV({ bookings, vacations, payments, settlements, expenses, itemDefs }) {
+function buildBackupCSV({ bookings, vacations, payments, settlements, expenses, itemDefs, settings }) {
   const escape = (v) => {
     const s = String(v ?? "");
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -347,6 +359,23 @@ function buildBackupCSV({ bookings, vacations, payments, settlements, expenses, 
   const stamp = new Date().toISOString();
   const meta = section("BACKUP META", ["Generated", "App"],
     [[stamp, "Last Man Standing — Rental Manager"]]);
+
+  // SETTINGS as a labeled section — critical for full recovery
+  const settingsRows = settings ? [
+    ["startDate", settings.startDate || ""],
+    ["endDate", settings.endDate || ""],
+    ["investment", (settings.investment || 0).toFixed(2)],
+    ["startingGeneral", (settings.startingGeneral || 0).toFixed(2)],
+    ["startingChetos", (settings.startingChetos || 0).toFixed(2)],
+    ["startingRodri", (settings.startingRodri || 0).toFixed(2)],
+  ] : [];
+  const settingsSection = section("SETTINGS", ["Key", "Value"], settingsRows);
+
+  const itemsRows = (settings?.items || []).map((i) => [
+    i.id, i.name, i.price, i.inventory,
+  ]);
+  const itemsSection = section("INVENTORY ITEMS",
+    ["ID", "Name", "Price", "Inventory"], itemsRows);
 
   const bookingsSection = section("BOOKINGS",
     [
@@ -404,7 +433,8 @@ function buildBackupCSV({ bookings, vacations, payments, settlements, expenses, 
     ])
   );
 
-  return [meta, "", bookingsSection, "", vacationsSection, "",
+  return [meta, "", settingsSection, "", itemsSection, "",
+          bookingsSection, "", vacationsSection, "",
           paymentsSection, "", expensesSection, "", settlementsSection].join("\n");
 }
 
@@ -2110,20 +2140,34 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const [bks, st, pmts, stls, exps, vcs] = await Promise.all([
+        const [bks, stResult, pmts, stls, exps, vcs] = await Promise.all([
           fetchAllBookings(),
           fetchSettings(),
           fetchAllPayments(),
           fetchAllSettlements(),
           fetchAllExpenses(),
-          fetchAllVacations(),  // NEW
+          fetchAllVacations(),
         ]);
         if (cancelled) return;
+
+        // SAFETY: if settings fetch failed (network error, timeout, etc.),
+        // do NOT initialize defaults — that would overwrite real data on the
+        // next save. Instead, surface the error and stop. The user can refresh.
+        if (!stResult.ok) {
+          setLoadError(
+            "Couldn't load settings from the database. " +
+            "Refresh the page in a moment. Your data is safe — we just couldn't reach it right now."
+          );
+          return;
+        }
+
         setBookings(bks);
         setPayments(pmts);
         setSettlements(stls);
         setExpenses(exps);
-        setVacations(vcs);  // NEW
+        setVacations(vcs);
+
+        const st = stResult.data;
         if (st) {
           setSettings({
             ...DEFAULT_SETTINGS,
@@ -2131,6 +2175,7 @@ export default function App() {
             items: st.items?.length ? st.items : DEFAULT_ITEMS,
           });
         } else {
+          // Settings row truly doesn't exist (first-time setup). Safe to create defaults.
           await saveSettingsDB(DEFAULT_SETTINGS);
         }
       } catch (e) {
@@ -2350,7 +2395,7 @@ export default function App() {
   // NEW: Full backup
   function runFullBackup() {
     const csv = buildBackupCSV({
-      bookings, vacations, payments, settlements, expenses, itemDefs,
+      bookings, vacations, payments, settlements, expenses, itemDefs, settings,
     });
     const stamp = new Date().toISOString().split("T")[0];
     downloadCSV(csv, `lms-backup-${stamp}.csv`);
