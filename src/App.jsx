@@ -51,6 +51,7 @@ function bookingToDB(b) {
     phone: b.phone || "",
     email: b.email || "",
     confirmed: b.confirmed || false,
+    confirm_sent: b.confirmSent || false,
     discount: b.discount || 0,
     items_total: b.itemsTotal || 0,
     delivery_fee: b.deliveryFee || 0,
@@ -74,6 +75,7 @@ function bookingFromDB(r) {
     phone: r.phone || "",
     email: r.email || "",
     confirmed: !!r.confirmed,
+    confirmSent: !!r.confirm_sent,
     discount: Number(r.discount) || 0,
     itemsTotal: Number(r.items_total) || 0,
     deliveryFee: Number(r.delivery_fee) || 0,
@@ -2107,74 +2109,92 @@ function TabBar({ active, onChange, tabs, bottom }) {
 }
 
 // ─── Backup Reminder Banner (NEW) ─────────────────────────────────────────────
-// \u2500\u2500\u2500 Reminders View (NEW) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-const REMINDER_WINDOW = 4;
-function RemindersView({ isMobile, bookings, itemDefs, onToggleConfirm }) {
-  const todayStr = new Date().toISOString().split("T")[0];
-  const t0 = new Date(todayStr + "T00:00:00");
-  const upcoming = bookings
-    .filter((b) => (b.status || "active") === "active")
-    .map((b) => ({ b, d: Math.round((new Date(b.startDate + "T00:00:00") - t0) / 86400000) }))
-    .filter((x) => x.d >= 0 && x.d <= REMINDER_WINDOW)
-    .sort((a, z) => a.b.startDate.localeCompare(z.b.startDate));
+// \u2500\u2500\u2500 Messages Hub (NEW) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+const REMINDER_WINDOW = 3;
+function RemindersView({ isMobile, bookings, itemDefs, onMarkSent }) {
+  const t0 = new Date(new Date().toISOString().split("T")[0] + "T00:00:00");
+  const daysUntil = (b) => Math.round((new Date(b.startDate + "T00:00:00") - t0) / 86400000);
+  const active = bookings.filter((b) => (b.status || "active") === "active" && daysUntil(b) >= 0);
+  const toConfirm = active.filter((b) => !b.confirmSent).sort((a, z) => a.startDate.localeCompare(z.startDate));
+  const toRemind = active.filter((b) => daysUntil(b) <= REMINDER_WINDOW && !b.confirmed).sort((a, z) => a.startDate.localeCompare(z.startDate));
 
   function itemsSummary(b) {
-    return itemDefs
-      .filter((it) => b.items && b.items[it.id])
-      .map((it) => b.items[it.id] + "\u00d7 " + it.name)
-      .join(", ");
+    return itemDefs.filter((it) => b.items && b.items[it.id]).map((it) => b.items[it.id] + "\u00d7 " + it.name).join(", ");
   }
-  function smsHref(b) {
+  function dateLabel(b) {
+    const days = daysBetween(b.startDate, b.endDate);
+    return days > 1 ? fmtDate(b.startDate) + "\u2013" + fmtDate(b.endDate) : fmtDate(b.startDate);
+  }
+  function sms(b, msg) {
     const phone = (b.phone || "").replace(/[^\d+]/g, "");
-    const when = fmtDate(b.startDate);
-    const msg = "Hi " + b.name + "! This is Last Man Standing confirming your booking for " +
-      when + ": " + itemsSummary(b) +
-      ". Reply YES to confirm, or let us know if anything changed. Thank you!";
     return "sms:" + phone + "?&body=" + encodeURIComponent(msg);
   }
+  function confirmMsg(b) {
+    const svc = b.serviceType === "delivery" ? "delivery to " + (b.address ? b.address : "your address") : "pickup";
+    const total = (b.totalCost || 0).toFixed(0);
+    return "Hi " + b.name + "! You're booked with Last Man Standing. " + itemsSummary(b) +
+      " for " + dateLabel(b) + " (" + svc + "). Total $" + total +
+      ". We'll text a reminder 2 days before. Reply here with any questions \u2014 thank you!";
+  }
+  function remindMsg(b) {
+    return "Hi " + b.name + "! Reminder from Last Man Standing: your booking is coming up " +
+      dateLabel(b) + " \u2014 " + itemsSummary(b) +
+      ". Reply YES to confirm, or let us know if anything changed. Thank you!";
+  }
+
+  const card = (b, msg, field) => {
+    const hasPhone = !!(b.phone && b.phone.trim());
+    const d = daysUntil(b);
+    return (
+      <div key={field + b.id} style={{ background: C.surface, border: "1px solid " + C.border, borderLeft: "3px solid " + C.sunshine, borderRadius: 4, padding: "12px 14px", marginBottom: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{b.name}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: d <= 2 ? C.brick : C.textMuted, whiteSpace: "nowrap" }}>
+            {d === 0 ? "Today" : d === 1 ? "Tomorrow" : "In " + d + " days"}
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: C.textSub, fontFamily: T.sans, marginTop: 3 }}>{dateLabel(b)}</div>
+        <div style={{ fontSize: 12, color: C.textSub, fontFamily: T.sans, marginTop: 2 }}>{itemsSummary(b)}</div>
+        <div style={{ fontSize: 12, color: hasPhone ? C.textSub : C.textMuted, fontFamily: T.mono, marginTop: 2 }}>{hasPhone ? b.phone : "No phone on file"}</div>
+        <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {hasPhone ? (
+            <a href={sms(b, msg)} style={{ textDecoration: "none" }}>
+              <span style={{ display: "inline-block", background: C.accent, color: "#fff", fontSize: 12, fontWeight: 600, fontFamily: T.sans, padding: "7px 14px", borderRadius: 3 }}>Text customer</span>
+            </a>
+          ) : (
+            <span style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans }}>Add a phone number to text</span>
+          )}
+          <button onClick={() => onMarkSent(b, field)} style={{ background: C.surface, color: C.textSub, border: "1px solid " + C.borderStrong, fontSize: 12, fontWeight: 600, fontFamily: T.sans, padding: "7px 12px", borderRadius: 3, cursor: "pointer" }}>Mark sent</button>
+        </div>
+      </div>
+    );
+  };
+
+  const head = (title, count, sub) => (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: C.accentDeep, textTransform: "uppercase", letterSpacing: "0.05em" }}>{title}{count ? " (" + count + ")" : ""}</div>
+      <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans }}>{sub}</div>
+    </div>
+  );
 
   return (
     <div style={{ padding: isMobile ? "14px 16px" : "18px 24px", maxWidth: 720 }}>
-      <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 4 }}>Reminders</div>
-      <div style={{ fontSize: 12, color: C.textSub, fontFamily: T.sans, marginBottom: 16 }}>
-        Bookings starting within {REMINDER_WINDOW} days. Tap Text to send a pre-written SMS, then mark it confirmed.
+      <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 14 }}>Messages</div>
+
+      {head("To confirm", toConfirm.length, "Send right after booking \u2014 restates the details back to the customer.")}
+      {toConfirm.length === 0 && <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans, marginBottom: 18 }}>All caught up.</div>}
+      {toConfirm.map((b) => card(b, confirmMsg(b), "confirmSent"))}
+
+      <div style={{ height: 18 }} />
+      {head("To remind", toRemind.length, "Bookings within " + REMINDER_WINDOW + " days \u2014 confirm logistics.")}
+      {toRemind.length === 0 && <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans, marginBottom: 18 }}>Nothing due.</div>}
+      {toRemind.map((b) => card(b, remindMsg(b), "confirmed"))}
+
+      <div style={{ height: 18 }} />
+      <div style={{ opacity: 0.45 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Thank you / review</div>
+        <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans }}>Paused \u2014 needs your Google review link. We'll switch this on later.</div>
       </div>
-      {upcoming.length === 0 && (
-        <div style={{ fontSize: 13, color: C.textMuted, fontFamily: T.sans, padding: "20px 0" }}>
-          Nothing coming up in the next {REMINDER_WINDOW} days.
-        </div>
-      )}
-      {upcoming.map(({ b, d }) => {
-        const hasPhone = !!(b.phone && b.phone.trim());
-        return (
-          <div key={b.id} style={{ background: C.surface, border: "1px solid " + (b.confirmed ? C.borderStrong : C.border), borderLeft: "3px solid " + (b.confirmed ? C.success : C.sunshine), borderRadius: 4, padding: "12px 14px", marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{b.name}</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: d <= 2 ? C.brick : C.textMuted, whiteSpace: "nowrap" }}>
-                {d === 0 ? "Today" : d === 1 ? "Tomorrow" : "In " + d + " days"}
-              </div>
-            </div>
-            <div style={{ fontSize: 12, color: C.textSub, fontFamily: T.sans, marginTop: 3 }}>{fmtDate(b.startDate)}</div>
-            <div style={{ fontSize: 12, color: C.textSub, fontFamily: T.sans, marginTop: 2 }}>{itemsSummary(b)}</div>
-            <div style={{ fontSize: 12, color: hasPhone ? C.textSub : C.textMuted, fontFamily: T.mono, marginTop: 2 }}>
-              {hasPhone ? b.phone : "No phone on file"}
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
-              {hasPhone ? (
-                <a href={smsHref(b)} style={{ textDecoration: "none" }}>
-                  <span style={{ display: "inline-block", background: C.accent, color: "#fff", fontSize: 12, fontWeight: 600, fontFamily: T.sans, padding: "7px 14px", borderRadius: 3 }}>Text customer</span>
-                </a>
-              ) : (
-                <span style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans }}>Add a phone number to text</span>
-              )}
-              <button onClick={() => onToggleConfirm(b)}
-                style={{ background: b.confirmed ? C.success : C.surface, color: b.confirmed ? "#fff" : C.textSub, border: "1px solid " + (b.confirmed ? C.success : C.borderStrong), fontSize: 12, fontWeight: 600, fontFamily: T.sans, padding: "7px 12px", borderRadius: 3, cursor: "pointer" }}>
-                {b.confirmed ? "\u2713 Confirmed" : "Mark confirmed"}
-              </button>
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -2322,8 +2342,8 @@ export default function App() {
     setSettings(s);
     saveSettingsDB(s);
   }, []);
-  const toggleConfirm = useCallback((b) => {
-    const updated = bookings.map((x) => (x.id === b.id ? { ...x, confirmed: !x.confirmed } : x));
+  const markSent = useCallback((b, field) => {
+    const updated = bookings.map((x) => (x.id === b.id ? { ...x, [field]: true } : x));
     const saved = updated.find((x) => x.id === b.id);
     saveBookings(updated, { type: "upsert", booking: saved });
   }, [bookings, saveBookings]);
@@ -2642,11 +2662,13 @@ export default function App() {
     editingItem, setEditingItem, itemDraft, setItemDraft, itemErr, setItemErr,
     saveSettings, setCalMonth,
   };
-  const remindersProps = { isMobile, bookings, itemDefs, onToggleConfirm: toggleConfirm };
+  const remindersProps = { isMobile, bookings, itemDefs, onMarkSent: markSent };
+  const _today0 = new Date(new Date().toISOString().split("T")[0] + "T00:00:00");
   const pendingReminders = bookings.filter((b) => {
-    if ((b.status || "active") !== "active" || b.confirmed) return false;
-    const d = Math.round((new Date(b.startDate + "T00:00:00") - new Date(new Date().toISOString().split("T")[0] + "T00:00:00")) / 86400000);
-    return d >= 0 && d <= 4;
+    if ((b.status || "active") !== "active") return false;
+    const d = Math.round((new Date(b.startDate + "T00:00:00") - _today0) / 86400000);
+    if (d < 0) return false;
+    return !b.confirmSent || (d <= 3 && !b.confirmed);
   }).length;
   const bookingFormProps = {
     isMobile, itemDefs, startDate, endDate, bookings,
@@ -2740,7 +2762,7 @@ export default function App() {
           tabs={[
             { id: "calendar", label: "Cal", icon: "▦" },
             { id: "list", label: "Bookings", icon: "≡" },
-            { id: "reminders", label: pendingReminders ? "Remind " + pendingReminders : "Remind", icon: "⏰" },
+            { id: "reminders", label: pendingReminders ? "Msgs " + pendingReminders : "Msgs", icon: "💬" },
             { id: "accounts", label: "$", icon: "$" },
             { id: "form", label: editingBookingId ? "Edit" : "New", icon: editingBookingId ? "✎" : "+" },
           ]} />
@@ -2799,7 +2821,7 @@ export default function App() {
             tabs={[
               { id: "calendar", label: "Calendar" },
               { id: "list", label: "Bookings" },
-              { id: "reminders", label: pendingReminders ? "Reminders (" + pendingReminders + ")" : "Reminders" },
+              { id: "reminders", label: pendingReminders ? "Messages (" + pendingReminders + ")" : "Messages" },
               { id: "accounts", label: "Accounts" },
             ]} />
           <div style={{ flex: 1, overflowY: "auto" }}>
