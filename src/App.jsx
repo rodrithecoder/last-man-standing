@@ -20,8 +20,14 @@ const DEFAULT_ITEMS = [
   { id: "coolers", name: "Coolers", price: 20, inventory: 2 },
 ];
 
+const DEFAULT_MESSAGE_TEMPLATES = {
+  confirm: "Hi {name}! You're booked with Last Man Standing. {items} for {date} ({service}). Total ${total}. We'll text a reminder 2 days before. Reply here with any questions — thank you!",
+  remind: "Hi {name}! Reminder from Last Man Standing: your booking is coming up {date} — {items}. Reply YES to confirm, or let us know if anything changed. Thank you!",
+};
+
 const DEFAULT_SETTINGS = {
   items: DEFAULT_ITEMS,
+  messageTemplates: DEFAULT_MESSAGE_TEMPLATES,
   startDate: today,
   endDate: (() => {
     const d = new Date();
@@ -754,6 +760,24 @@ function SettingsPanel({
           ) : (
             <Btn onClick={startNewItem} variant="default" small>+ Add Item</Btn>
           )}
+
+          <Divider />
+          <Label>Text Message Templates</Label>
+          <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, margin: "-4px 0 8px", lineHeight: 1.5 }}>
+            Used by the Messages tab. These placeholders auto-fill: {"{name} {items} {date} {service} {total}"}
+          </div>
+          {[{ key: "confirm", label: "Booking confirmation" }, { key: "remind", label: "2-day reminder" }].map((tpl) => (
+            <div key={tpl.key} style={{ marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.textSub, fontFamily: T.sans }}>{tpl.label}</span>
+                <button type="button" onClick={() => setSettingsDraft((d) => ({ ...d, messageTemplates: { ...(d.messageTemplates || {}), [tpl.key]: DEFAULT_MESSAGE_TEMPLATES[tpl.key] } }))}
+                  style={{ border: "none", background: "none", color: C.accent, fontSize: 11, fontFamily: T.sans, cursor: "pointer" }}>Reset</button>
+              </div>
+              <textarea rows={3} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.4, fontFamily: T.sans }}
+                value={settingsDraft.messageTemplates && settingsDraft.messageTemplates[tpl.key] != null ? settingsDraft.messageTemplates[tpl.key] : DEFAULT_MESSAGE_TEMPLATES[tpl.key]}
+                onChange={(e) => setSettingsDraft((d) => ({ ...d, messageTemplates: { ...(d.messageTemplates || {}), [tpl.key]: e.target.value } }))} />
+            </div>
+          ))}
 
           {settingsErr && <div style={{ fontSize: 11, color: C.danger, margin: "8px 0" }}>{settingsErr}</div>}
 
@@ -2111,7 +2135,7 @@ function TabBar({ active, onChange, tabs, bottom }) {
 // ─── Backup Reminder Banner (NEW) ─────────────────────────────────────────────
 // \u2500\u2500\u2500 Messages Hub (NEW) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const REMINDER_WINDOW = 3;
-function RemindersView({ isMobile, bookings, itemDefs, onMarkSent }) {
+function RemindersView({ isMobile, bookings, itemDefs, onMarkSent, templates }) {
   const [tab, setTab] = useState("confirm");
   const [phoneOnly, setPhoneOnly] = useState(false);
   const t0 = new Date(new Date().toISOString().split("T")[0] + "T00:00:00");
@@ -2121,6 +2145,7 @@ function RemindersView({ isMobile, bookings, itemDefs, onMarkSent }) {
   const toConfirm = filt(active.filter((b) => !b.confirmSent)).sort((a, z) => a.startDate.localeCompare(z.startDate));
   const toRemind = filt(active.filter((b) => daysUntil(b) <= REMINDER_WINDOW && !b.confirmed)).sort((a, z) => a.startDate.localeCompare(z.startDate));
 
+  const tplSet = { ...DEFAULT_MESSAGE_TEMPLATES, ...(templates || {}) };
   function itemsSummary(b) {
     return itemDefs.filter((it) => b.items && b.items[it.id]).map((it) => b.items[it.id] + "\u00d7 " + it.name).join(", ");
   }
@@ -2128,21 +2153,22 @@ function RemindersView({ isMobile, bookings, itemDefs, onMarkSent }) {
     const days = daysBetween(b.startDate, b.endDate);
     return days > 1 ? fmtDate(b.startDate) + "\u2013" + fmtDate(b.endDate) : fmtDate(b.startDate);
   }
+  function fillTemplate(t, b) {
+    const svc = b.serviceType === "delivery" ? "delivery to " + (b.address ? b.address : "your address") : "pickup";
+    const map = {
+      "{name}": b.name || "",
+      "{items}": itemsSummary(b),
+      "{date}": dateLabel(b),
+      "{service}": svc,
+      "{total}": (b.totalCost || 0).toFixed(0),
+    };
+    return (t || "").replace(/\{name\}|\{items\}|\{date\}|\{service\}|\{total\}/g, (m) => map[m]);
+  }
+  const confirmMsg = (b) => fillTemplate(tplSet.confirm, b);
+  const remindMsg = (b) => fillTemplate(tplSet.remind, b);
   function sms(b, msg) {
     const phone = (b.phone || "").replace(/[^\d+]/g, "");
     return "sms:" + phone + "?&body=" + encodeURIComponent(msg);
-  }
-  function confirmMsg(b) {
-    const svc = b.serviceType === "delivery" ? "delivery to " + (b.address ? b.address : "your address") : "pickup";
-    const total = (b.totalCost || 0).toFixed(0);
-    return "Hi " + b.name + "! You're booked with Last Man Standing. " + itemsSummary(b) +
-      " for " + dateLabel(b) + " (" + svc + "). Total $" + total +
-      ". We'll text a reminder 2 days before. Reply here with any questions \u2014 thank you!";
-  }
-  function remindMsg(b) {
-    return "Hi " + b.name + "! Reminder from Last Man Standing: your booking is coming up " +
-      dateLabel(b) + " \u2014 " + itemsSummary(b) +
-      ". Reply YES to confirm, or let us know if anything changed. Thank you!";
   }
 
   const card = (b, msg, field) => {
@@ -2699,7 +2725,7 @@ export default function App() {
     editingItem, setEditingItem, itemDraft, setItemDraft, itemErr, setItemErr,
     saveSettings, setCalMonth,
   };
-  const remindersProps = { isMobile, bookings, itemDefs, onMarkSent: markSent };
+  const remindersProps = { isMobile, bookings, itemDefs, onMarkSent: markSent, templates: settings.messageTemplates };
   const _today0 = new Date(new Date().toISOString().split("T")[0] + "T00:00:00");
   const pendingReminders = bookings.filter((b) => {
     if ((b.status || "active") !== "active") return false;
