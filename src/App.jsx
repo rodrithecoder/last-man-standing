@@ -2112,11 +2112,14 @@ function TabBar({ active, onChange, tabs, bottom }) {
 // \u2500\u2500\u2500 Messages Hub (NEW) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const REMINDER_WINDOW = 3;
 function RemindersView({ isMobile, bookings, itemDefs, onMarkSent }) {
+  const [tab, setTab] = useState("confirm");
+  const [phoneOnly, setPhoneOnly] = useState(false);
   const t0 = new Date(new Date().toISOString().split("T")[0] + "T00:00:00");
   const daysUntil = (b) => Math.round((new Date(b.startDate + "T00:00:00") - t0) / 86400000);
   const active = bookings.filter((b) => (b.status || "active") === "active" && daysUntil(b) >= 0);
-  const toConfirm = active.filter((b) => !b.confirmSent).sort((a, z) => a.startDate.localeCompare(z.startDate));
-  const toRemind = active.filter((b) => daysUntil(b) <= REMINDER_WINDOW && !b.confirmed).sort((a, z) => a.startDate.localeCompare(z.startDate));
+  const filt = (arr) => (phoneOnly ? arr.filter((b) => b.phone && b.phone.trim()) : arr);
+  const toConfirm = filt(active.filter((b) => !b.confirmSent)).sort((a, z) => a.startDate.localeCompare(z.startDate));
+  const toRemind = filt(active.filter((b) => daysUntil(b) <= REMINDER_WINDOW && !b.confirmed)).sort((a, z) => a.startDate.localeCompare(z.startDate));
 
   function itemsSummary(b) {
     return itemDefs.filter((it) => b.items && b.items[it.id]).map((it) => b.items[it.id] + "\u00d7 " + it.name).join(", ");
@@ -2170,31 +2173,65 @@ function RemindersView({ isMobile, bookings, itemDefs, onMarkSent }) {
     );
   };
 
-  const head = (title, count, sub) => (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 13, fontWeight: 800, color: C.accentDeep, textTransform: "uppercase", letterSpacing: "0.05em" }}>{title}{count ? " (" + count + ")" : ""}</div>
-      <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans }}>{sub}</div>
-    </div>
-  );
+  const segs = [
+    { id: "confirm", label: "To confirm", count: toConfirm.length },
+    { id: "remind", label: "To remind", count: toRemind.length },
+    { id: "thank", label: "Thank you", paused: true },
+  ];
+  const subFor = {
+    confirm: "Send right after booking \u2014 restates the details back to the customer.",
+    remind: "Bookings within " + REMINDER_WINDOW + " days \u2014 confirm logistics.",
+    thank: "Paused \u2014 needs your Google review link.",
+  };
 
   return (
     <div style={{ padding: isMobile ? "14px 16px" : "18px 24px", maxWidth: 720 }}>
-      <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 14 }}>Messages</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 12 }}>Messages</div>
 
-      {head("To confirm", toConfirm.length, "Send right after booking \u2014 restates the details back to the customer.")}
-      {toConfirm.length === 0 && <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans, marginBottom: 18 }}>All caught up.</div>}
-      {toConfirm.map((b) => card(b, confirmMsg(b), "confirmSent"))}
-
-      <div style={{ height: 18 }} />
-      {head("To remind", toRemind.length, "Bookings within " + REMINDER_WINDOW + " days \u2014 confirm logistics.")}
-      {toRemind.length === 0 && <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans, marginBottom: 18 }}>Nothing due.</div>}
-      {toRemind.map((b) => card(b, remindMsg(b), "confirmed"))}
-
-      <div style={{ height: 18 }} />
-      <div style={{ opacity: 0.45 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Thank you / review</div>
-        <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans }}>Paused \u2014 needs your Google review link. We'll switch this on later.</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        {segs.map((sg) => {
+          const on = tab === sg.id;
+          return (
+            <button key={sg.id} onClick={() => setTab(sg.id)}
+              style={{ flex: 1, padding: "8px 6px", borderRadius: 4, cursor: "pointer", fontFamily: T.sans, fontSize: isMobile ? 11 : 12, fontWeight: 700,
+                border: "1px solid " + (on ? C.accent : C.border),
+                background: on ? C.accent : C.surface,
+                color: on ? "#fff" : (sg.paused ? C.textMuted : C.textSub) }}>
+              {sg.label}{sg.count ? " (" + sg.count + ")" : ""}
+            </button>
+          );
+        })}
       </div>
+
+      <button onClick={() => setPhoneOnly((v) => !v)}
+        style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 14, padding: "5px 10px", borderRadius: 14, cursor: "pointer", fontFamily: T.sans, fontSize: 11, fontWeight: 600,
+          border: "1px solid " + (phoneOnly ? C.accent : C.borderStrong),
+          background: phoneOnly ? C.accentSoft : C.surface,
+          color: phoneOnly ? C.accent : C.textSub }}>
+        <span style={{ width: 14, height: 14, borderRadius: 3, lineHeight: "13px", textAlign: "center", display: "inline-block", fontSize: 10, color: "#fff",
+          border: "1px solid " + (phoneOnly ? C.accent : C.borderStrong), background: phoneOnly ? C.accent : "transparent" }}>{phoneOnly ? "\u2713" : ""}</span>
+        Only show with phone number
+      </button>
+
+      <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginBottom: 12 }}>{subFor[tab]}</div>
+
+      {tab === "confirm" && (
+        toConfirm.length === 0
+          ? <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans }}>{phoneOnly ? "None with a phone number." : "All caught up."}</div>
+          : toConfirm.map((b) => card(b, confirmMsg(b), "confirmSent"))
+      )}
+
+      {tab === "remind" && (
+        toRemind.length === 0
+          ? <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans }}>{phoneOnly ? "None with a phone number." : "Nothing due."}</div>
+          : toRemind.map((b) => card(b, remindMsg(b), "confirmed"))
+      )}
+
+      {tab === "thank" && (
+        <div style={{ fontSize: 12, color: C.textMuted, fontFamily: T.sans, lineHeight: 1.5, padding: "6px 0" }}>
+          This step is paused until you add a Google review link. Once your Google Business page is live, send me the link and I'll switch it on.
+        </div>
+      )}
     </div>
   );
 }
