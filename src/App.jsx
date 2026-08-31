@@ -1134,6 +1134,37 @@ function CalendarView({
   );
 }
 
+// ─── Address Link (taps through to Google Maps) ──────────────────────────────
+function AddressLink({ address, size = 12, compact }) {
+  if (!address) return null;
+  const href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address);
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: "inline-flex",
+        alignItems: "flex-start",
+        gap: 4,
+        fontSize: size,
+        lineHeight: 1.35,
+        fontFamily: T.sans,
+        color: C.accent,
+        textDecoration: "none",
+        borderBottom: `1px solid ${C.accentSoft}`,
+        padding: compact ? 0 : "1px 0",
+        wordBreak: "break-word",
+      }}
+      title={"Open in Google Maps: " + address}
+    >
+      <span style={{ flex: "0 0 auto" }} aria-hidden="true">📍</span>
+      <span>{address}</span>
+    </a>
+  );
+}
+
 // ─── Bookings List ────────────────────────────────────────────────────────────
 function BookingsList({
   isMobile, bookings, itemDefs,
@@ -1241,6 +1272,11 @@ function BookingsList({
                       <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginTop: 2 }}>
                         {b.salesRep} · {fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}
                       </div>
+                      {b.address && (
+                        <div style={{ marginTop: 4 }}>
+                          <AddressLink address={b.address} size={12} />
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
                       {!isDone && <Btn small variant="ghost" onClick={() => startEditBooking(b)}>Edit</Btn>}
@@ -1305,7 +1341,7 @@ function BookingsList({
                         <span style={{ fontSize: 10, color: C.textSub, border: `1px solid ${C.border}`, padding: "2px 7px", borderRadius: 2 }}>
                           {b.serviceType === "delivery" ? "Delivery" : "Pickup"}
                         </span>
-                        {b.address && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{b.address}</div>}
+                        {b.address && <div style={{ marginTop: 3 }}><AddressLink address={b.address} size={10} compact /></div>}
                       </td>
                       <td style={{ padding: "9px 10px", color: C.textSub, fontFamily: T.mono }}>${b.itemsTotal?.toFixed(2) || "—"}</td>
                       <td style={{ padding: "9px 10px", color: C.textSub, fontFamily: T.mono }}>{b.deliveryFee > 0 ? `$${b.deliveryFee.toFixed(2)}` : "—"}</td>
