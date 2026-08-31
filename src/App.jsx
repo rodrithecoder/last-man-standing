@@ -1279,7 +1279,7 @@ function BookingsList({
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      {!isDone && <Btn small variant="ghost" onClick={() => startEditBooking(b)}>Edit</Btn>}
+                      <Btn small variant="ghost" onClick={() => startEditBooking(b)}>{isDone ? "Open" : "Edit"}</Btn>
                       <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
                     </div>
                   </div>
@@ -1351,7 +1351,7 @@ function BookingsList({
                         {!isDone && (
                           <Btn small variant="primary" onClick={() => requestMarkDone(b)} style={{ marginRight: 4 }}>✓ Done</Btn>
                         )}
-                        {!isDone && <Btn small variant="ghost" onClick={() => startEditBooking(b)}>Edit</Btn>}
+                        <Btn small variant="ghost" onClick={() => startEditBooking(b)}>{isDone ? "Open" : "Edit"}</Btn>
                         <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
                       </td>
                     </tr>
