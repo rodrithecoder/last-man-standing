@@ -1193,7 +1193,7 @@ function BookingsList({
   filterStart, setFilterStart, filterEnd, setFilterEnd,
   filterStatus, setFilterStatus,
   startEditBooking, requestRemoveBooking, exportCSV,
-  requestMarkOut, requestMarkReturned, requestRecordPayment, paidIds,
+  requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, paidIds,
 }) {
   const inputStyle = inp(isMobile);
 
@@ -1303,6 +1303,11 @@ function BookingsList({
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
+                      {st !== ST_ACTIVE && (
+                        <Btn small variant="ghost" onClick={() => requestStepBack(b)} title={isDone ? "Reopen — back to Out" : "Undo — back to Active"}>
+                          ↩ {isDone ? "Reopen" : "Undo"}
+                        </Btn>
+                      )}
                       <Btn small variant="ghost" onClick={() => startEditBooking(b)}>{isDone ? "Open" : "Edit"}</Btn>
                       <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
                     </div>
@@ -1393,6 +1398,11 @@ function BookingsList({
                         )}
                         {!isDone && !isPaid && (
                           <Btn small variant="ghost" onClick={() => requestRecordPayment(b)} style={{ marginRight: 4 }}>💵</Btn>
+                        )}
+                        {st !== ST_ACTIVE && (
+                          <Btn small variant="ghost" onClick={() => requestStepBack(b)} style={{ marginRight: 4 }} title={isDone ? "Reopen — back to Out" : "Undo — back to Active"}>
+                            ↩ {isDone ? "Reopen" : "Undo"}
+                          </Btn>
                         )}
                         <Btn small variant="ghost" onClick={() => startEditBooking(b)}>{isDone ? "Open" : "Edit"}</Btn>
                         <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
@@ -2680,6 +2690,8 @@ export default function App() {
     if (payments.some((p) => p.bookingId === b.id)) setStatus(b, "done");
     else setDoneDialog({ booking: b, complete: true });
   }
+  // Undo a mis-tap: out -> active, done -> out. Never touches recorded payments.
+  function requestStepBack(b) { setStatus(b, bStatus(b) === "done" ? "out" : "active"); }
   // Payment on its own, at any stage — leaves the booking's status alone.
   function requestRecordPayment(b) { setDoneDialog({ booking: b, complete: false }); }
 
@@ -2847,7 +2859,7 @@ export default function App() {
     filterStart, setFilterStart, filterEnd, setFilterEnd,
     filterStatus, setFilterStatus,
     startEditBooking, requestRemoveBooking, exportCSV,
-    requestMarkOut, requestMarkReturned, requestRecordPayment, paidIds,
+    requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, paidIds,
   };
 
   const accountsProps = {
