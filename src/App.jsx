@@ -1165,6 +1165,27 @@ function AddressLink({ address, size = 12, compact }) {
   );
 }
 
+// ─── Booking Status ──────────────────────────────────────────────────────────
+const ST_ACTIVE = "active";
+const ST_OUT = "out";
+const ST_DONE = "done";
+function bStatus(b) { return b.status || ST_ACTIVE; }
+
+function StatusBadge({ status, paid }) {
+  const pills = [];
+  if (status === ST_OUT) pills.push({ t: "OUT", bg: C.warning });
+  if (status === ST_DONE) pills.push({ t: "DONE", bg: C.accent });
+  if (paid) pills.push({ t: "PAID", bg: C.accentDeep });
+  if (!pills.length) return null;
+  return (
+    <>
+      {pills.map((p) => (
+        <span key={p.t} style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: p.bg, padding: "2px 6px", borderRadius: 2, letterSpacing: "0.06em" }}>{p.t}</span>
+      ))}
+    </>
+  );
+}
+
 // ─── Bookings List ────────────────────────────────────────────────────────────
 function BookingsList({
   isMobile, bookings, itemDefs,
@@ -1172,7 +1193,7 @@ function BookingsList({
   filterStart, setFilterStart, filterEnd, setFilterEnd,
   filterStatus, setFilterStatus,
   startEditBooking, requestRemoveBooking, exportCSV,
-  requestMarkDone,
+  requestMarkOut, requestMarkReturned, requestRecordPayment, paidIds,
 }) {
   const inputStyle = inp(isMobile);
 
@@ -1180,7 +1201,9 @@ function BookingsList({
     const s = search.trim().toLowerCase();
     return bookings.filter((b) => {
       const status = b.status || "active";
-      if (filterStatus !== "all" && status !== filterStatus) return false;
+      // "Active" means every open booking — including gear that's out and not back yet.
+      if (filterStatus === "active") { if (status === ST_DONE) return false; }
+      else if (filterStatus !== "all" && status !== filterStatus) return false;
       if (s) {
         const hay = `${b.name} ${b.salesRep} ${b.notes || ""} ${b.address || ""}`.toLowerCase();
         if (!hay.includes(s)) return false;
@@ -1207,6 +1230,7 @@ function BookingsList({
           <Label>Status</Label>
           <select style={inputStyle} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="active">Active</option>
+            <option value="out">Out / Pending Return</option>
             <option value="done">Done</option>
             <option value="all">All</option>
           </select>
@@ -1252,11 +1276,13 @@ function BookingsList({
           {isMobile ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {filtered.map((b) => {
-                const isDone = (b.status || "active") === "done";
+                const st = bStatus(b);
+                const isDone = st === ST_DONE;
+                const isPaid = paidIds.has(b.id);
                 return (
                 <div key={b.id} style={{
                   background: C.surface,
-                  border: `1px solid ${isDone ? C.accent : C.border}`,
+                  border: `1px solid ${isDone ? C.accent : st === ST_OUT ? C.warning : C.border}`,
                   borderRadius: 3,
                   padding: "12px 14px",
                   opacity: isDone ? 0.85 : 1,
@@ -1265,9 +1291,7 @@ function BookingsList({
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <div style={{ fontWeight: 600, fontSize: 14, color: C.text, fontFamily: T.sans }}>{b.name}</div>
-                        {isDone && (
-                          <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: C.accent, padding: "2px 6px", borderRadius: 2, letterSpacing: "0.06em" }}>DONE</span>
-                        )}
+                        <StatusBadge status={st} paid={isPaid} />
                       </div>
                       <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginTop: 2 }}>
                         {b.salesRep} · {fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}
@@ -1297,10 +1321,21 @@ function BookingsList({
                     <span style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</span>
                   </div>
                   {!isDone && (
-                    <div style={{ marginTop: 10 }}>
-                      <Btn variant="primary" fullWidth onClick={() => requestMarkDone(b)}>
-                        ✓ Mark Done & Record Payment
-                      </Btn>
+                    <div style={{ marginTop: 10, display: "flex", gap: 6 }}>
+                      {st === ST_ACTIVE ? (
+                        <Btn variant="primary" fullWidth onClick={() => requestMarkOut(b)}>
+                          {b.serviceType === "delivery" ? "🚚 Delivered" : "📦 Picked Up by Customer"}
+                        </Btn>
+                      ) : (
+                        <Btn variant="primary" fullWidth onClick={() => requestMarkReturned(b)}>
+                          ✓ Returned
+                        </Btn>
+                      )}
+                      {!isPaid && (
+                        <Btn variant="ghost" onClick={() => requestRecordPayment(b)} style={{ whiteSpace: "nowrap" }}>
+                          💵 Payment
+                        </Btn>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1319,15 +1354,15 @@ function BookingsList({
                 </thead>
                 <tbody>
                   {filtered.map((b, i) => {
-                    const isDone = (b.status || "active") === "done";
+                    const st = bStatus(b);
+                    const isDone = st === ST_DONE;
+                    const isPaid = paidIds.has(b.id);
                     return (
                     <tr key={b.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.bg, opacity: isDone ? 0.7 : 1 }}>
                       <td style={{ padding: "9px 10px", fontWeight: 600, color: C.text }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           {b.name}
-                          {isDone && (
-                            <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: C.accent, padding: "2px 5px", borderRadius: 2, letterSpacing: "0.06em" }}>DONE</span>
-                          )}
+                          <StatusBadge status={st} paid={isPaid} />
                         </div>
                         {b.notes && <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{b.notes}</div>}
                       </td>
@@ -1348,8 +1383,16 @@ function BookingsList({
                       <td style={{ padding: "9px 10px", color: b.discount > 0 ? C.danger : C.textMuted, fontFamily: T.mono }}>{b.discount > 0 ? `-${b.discount}%` : "—"}</td>
                       <td style={{ padding: "9px 10px", fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</td>
                       <td style={{ padding: "9px 10px", whiteSpace: "nowrap" }}>
-                        {!isDone && (
-                          <Btn small variant="primary" onClick={() => requestMarkDone(b)} style={{ marginRight: 4 }}>✓ Done</Btn>
+                        {st === ST_ACTIVE && (
+                          <Btn small variant="primary" onClick={() => requestMarkOut(b)} style={{ marginRight: 4 }}>
+                            {b.serviceType === "delivery" ? "Delivered" : "Picked Up"}
+                          </Btn>
+                        )}
+                        {st === ST_OUT && (
+                          <Btn small variant="primary" onClick={() => requestMarkReturned(b)} style={{ marginRight: 4 }}>✓ Returned</Btn>
+                        )}
+                        {!isDone && !isPaid && (
+                          <Btn small variant="ghost" onClick={() => requestRecordPayment(b)} style={{ marginRight: 4 }}>💵</Btn>
                         )}
                         <Btn small variant="ghost" onClick={() => startEditBooking(b)}>{isDone ? "Open" : "Edit"}</Btn>
                         <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
@@ -1388,7 +1431,7 @@ function BookingsList({
 }
 
 // ─── Mark Done Dialog ────────────────────────────────────────────────────────
-function MarkDoneDialog({ open, booking, onConfirm, onCancel }) {
+function MarkDoneDialog({ open, booking, complete, onConfirm, onCancel }) {
   const [amount, setAmount] = useState("");
   const [collectedBy, setCollectedBy] = useState("rodri");
   const [err, setErr] = useState("");
@@ -1420,7 +1463,7 @@ function MarkDoneDialog({ open, booking, onConfirm, onCancel }) {
         padding: "20px 22px", maxWidth: 420, width: "100%", fontFamily: T.sans,
       }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: C.accentDeep, marginBottom: 4 }}>
-          Mark Booking Done
+          {complete ? "Return & Record Payment" : "Record Payment"}
         </div>
         <div style={{ fontSize: 12, color: C.textSub, marginBottom: 16 }}>
           {booking.name} — {fmtDateShort(booking.startDate)} to {fmtDateShort(booking.endDate)}
@@ -1455,7 +1498,7 @@ function MarkDoneDialog({ open, booking, onConfirm, onCancel }) {
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
           <Btn onClick={onCancel} variant="ghost">Cancel</Btn>
-          <Btn onClick={submit} variant="primary">Mark Done</Btn>
+          <Btn onClick={submit} variant="primary">{complete ? "Save & Close Booking" : "Save Payment"}</Btn>
         </div>
       </div>
     </div>
@@ -2626,10 +2669,24 @@ export default function App() {
     setLastBackupAtState(nowIso);
   }
 
-  function requestMarkDone(b) { setDoneDialog(b); }
+  async function setStatus(b, status) {
+    setBookings((bs) => bs.map((x) => (x.id === b.id ? { ...x, status } : x)));
+    await setBookingStatusDB(b.id, status);
+  }
+  // Gear has left: delivered to the customer, or collected by them.
+  function requestMarkOut(b) { setStatus(b, "out"); }
+  // Gear is back. If nothing has been collected yet, ask for payment on the way out.
+  function requestMarkReturned(b) {
+    if (payments.some((p) => p.bookingId === b.id)) setStatus(b, "done");
+    else setDoneDialog({ booking: b, complete: true });
+  }
+  // Payment on its own, at any stage — leaves the booking's status alone.
+  function requestRecordPayment(b) { setDoneDialog({ booking: b, complete: false }); }
+
   async function confirmMarkDone({ amount, collectedBy }) {
-    const b = doneDialog;
-    if (!b) return;
+    const d = doneDialog;
+    if (!d || !d.booking) return;
+    const b = d.booking;
     const payment = {
       id: genId(),
       bookingId: b.id,
@@ -2639,9 +2696,12 @@ export default function App() {
       note: "",
     };
     setPayments((p) => [...p, payment]);
-    setBookings((bs) => bs.map((x) => (x.id === b.id ? { ...x, status: "done" } : x)));
+    if (d.complete) setBookings((bs) => bs.map((x) => (x.id === b.id ? { ...x, status: "done" } : x)));
     setDoneDialog(null);
-    await Promise.all([addPaymentDB(payment), setBookingStatusDB(b.id, "done")]);
+    await Promise.all([
+      addPaymentDB(payment),
+      ...(d.complete ? [setBookingStatusDB(b.id, "done")] : []),
+    ]);
   }
 
   function requestAddExpense() { setExpenseDialog(true); }
@@ -2737,7 +2797,7 @@ export default function App() {
 
   // Projected revenue from active bookings (preserved from your version)
   const projectedRevenue = bookings
-    .filter((b) => (b.status || "active") === "active")
+    .filter((b) => (b.status || "active") !== "done")
     .reduce((s, b) => s + b.totalCost, 0);
 
   const dayStrain = useCallback((ds) => {
@@ -2780,13 +2840,14 @@ export default function App() {
     startDate, endDate, bookings, itemDefs, dayStrain, strainBg,
     vacations,  // NEW
   };
+  const paidIds = useMemo(() => new Set(payments.map((p) => p.bookingId)), [payments]);
   const listProps = {
     isMobile, bookings, itemDefs,
     search, setSearch, filterService, setFilterService,
     filterStart, setFilterStart, filterEnd, setFilterEnd,
     filterStatus, setFilterStatus,
     startEditBooking, requestRemoveBooking, exportCSV,
-    requestMarkDone,
+    requestMarkOut, requestMarkReturned, requestRecordPayment, paidIds,
   };
 
   const accountsProps = {
@@ -2876,7 +2937,8 @@ export default function App() {
         />
         <MarkDoneDialog
           open={!!doneDialog}
-          booking={doneDialog}
+          booking={doneDialog?.booking}
+          complete={!!doneDialog?.complete}
           onConfirm={confirmMarkDone}
           onCancel={() => setDoneDialog(null)}
         />
@@ -2942,7 +3004,8 @@ export default function App() {
       />
       <MarkDoneDialog
         open={!!doneDialog}
-        booking={doneDialog}
+        booking={doneDialog?.booking}
+        complete={!!doneDialog?.complete}
         onConfirm={confirmMarkDone}
         onCancel={() => setDoneDialog(null)}
       />
