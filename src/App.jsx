@@ -285,9 +285,30 @@ function localDateStr(d) {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+// Gear that's still marked "out" hasn't come back, whatever the end date says.
+// It keeps occupying inventory through today — so today's availability is honest —
+// but not into the future, so an overdue return doesn't block next month's bookings.
+function effectiveEnd(b) {
+  if ((b.status || "active") !== "out") return b.endDate;
+  const today = localDateStr(new Date());
+  return b.endDate >= today ? b.endDate : today;
+}
+function occupiesOn(b, date) {
+  return b.startDate <= date && effectiveEnd(b) >= date;
+}
+function isOverdue(b) {
+  return (b.status || "active") === "out" && b.endDate < localDateStr(new Date());
+}
+function daysOverdue(b) {
+  if (!isOverdue(b)) return 0;
+  const end = new Date(b.endDate + "T00:00:00");
+  const today = new Date(localDateStr(new Date()) + "T00:00:00");
+  return Math.round((today - end) / 86400000);
+}
+
 function usedOnDate(bookings, date, itemId) {
   return bookings
-    .filter((b) => b.startDate <= date && b.endDate >= date)
+    .filter((b) => occupiesOn(b, date))
     .reduce((s, b) => s + (b.items?.[itemId] || 0), 0);
 }
 function maxUsedInRange(bookings, start, end, itemId, excludeId = null) {
@@ -297,7 +318,7 @@ function maxUsedInRange(bookings, start, end, itemId, excludeId = null) {
   while (cur <= last) {
     const ds = localDateStr(cur);
     const used = bookings
-      .filter((b) => b.id !== excludeId && b.startDate <= ds && b.endDate >= ds)
+      .filter((b) => b.id !== excludeId && occupiesOn(b, ds))
       .reduce((s, b) => s + (b.items?.[itemId] || 0), 0);
     max = Math.max(max, used);
     cur.setDate(cur.getDate() + 1);
@@ -1171,9 +1192,10 @@ const ST_OUT = "out";
 const ST_DONE = "done";
 function bStatus(b) { return b.status || ST_ACTIVE; }
 
-function StatusBadge({ status, paid }) {
+function StatusBadge({ status, paid, overdue }) {
   const pills = [];
-  if (status === ST_OUT) pills.push({ t: "OUT", bg: C.warning });
+  if (status === ST_OUT && !overdue) pills.push({ t: "OUT", bg: C.warning });
+  if (status === ST_OUT && overdue) pills.push({ t: "OVERDUE", bg: C.danger });
   if (status === ST_DONE) pills.push({ t: "DONE", bg: C.accent });
   if (paid) pills.push({ t: "PAID", bg: C.accentDeep });
   if (!pills.length) return null;
@@ -1279,10 +1301,11 @@ function BookingsList({
                 const st = bStatus(b);
                 const isDone = st === ST_DONE;
                 const isPaid = paidIds.has(b.id);
+                const late = isOverdue(b);
                 return (
                 <div key={b.id} style={{
                   background: C.surface,
-                  border: `1px solid ${isDone ? C.accent : st === ST_OUT ? C.warning : C.border}`,
+                  border: `1px solid ${isDone ? C.accent : late ? C.danger : st === ST_OUT ? C.warning : C.border}`,
                   borderRadius: 3,
                   padding: "12px 14px",
                   opacity: isDone ? 0.85 : 1,
@@ -1291,7 +1314,12 @@ function BookingsList({
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <div style={{ fontWeight: 600, fontSize: 14, color: C.text, fontFamily: T.sans }}>{b.name}</div>
-                        <StatusBadge status={st} paid={isPaid} />
+                        <StatusBadge status={st} paid={isPaid} overdue={late} />
+                        {late && (
+                          <span style={{ fontSize: 10, color: C.danger, fontFamily: T.sans, fontWeight: 600 }}>
+                            {daysOverdue(b)}d past return
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginTop: 2 }}>
                         {b.salesRep} · {fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}
@@ -1362,12 +1390,14 @@ function BookingsList({
                     const st = bStatus(b);
                     const isDone = st === ST_DONE;
                     const isPaid = paidIds.has(b.id);
+                    const late = isOverdue(b);
                     return (
                     <tr key={b.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.bg, opacity: isDone ? 0.7 : 1 }}>
                       <td style={{ padding: "9px 10px", fontWeight: 600, color: C.text }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           {b.name}
-                          <StatusBadge status={st} paid={isPaid} />
+                          <StatusBadge status={st} paid={isPaid} overdue={late} />
+                          {late && <span style={{ fontSize: 10, color: C.danger, fontWeight: 600 }}>{daysOverdue(b)}d</span>}
                         </div>
                         {b.notes && <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{b.notes}</div>}
                       </td>
@@ -1421,9 +1451,11 @@ function BookingsList({
               ...itemDefs.map((it) => ({ l: it.name, v: filtered.reduce((s, b) => s + (b.items?.[it.id] || 0), 0) })),
               { l: "Pickup", v: filtered.filter((b) => b.serviceType === "pickup").length },
               { l: "Delivery", v: filtered.filter((b) => b.serviceType === "delivery").length },
+              { l: "Out", v: filtered.filter((b) => bStatus(b) === ST_OUT).length },
+              { l: "Overdue", v: filtered.filter((b) => isOverdue(b)).length, danger: true },
             ].map((s) => (
               <div key={s.l}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>{s.v}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: s.danger && s.v > 0 ? C.danger : C.text, fontFamily: T.mono }}>{s.v}</div>
                 <div style={{ fontSize: 10, color: C.textMuted, fontFamily: T.sans, letterSpacing: "0.06em", textTransform: "uppercase" }}>{s.l}</div>
               </div>
             ))}
