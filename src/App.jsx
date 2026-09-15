@@ -64,6 +64,8 @@ function bookingToDB(b) {
     discount_amount: b.discountAmount || 0,
     total_cost: b.totalCost,
     status: b.status || "active",
+    eta_out: b.etaOut || null,
+    eta_back: b.etaBack || null,
   };
 }
 function bookingFromDB(r) {
@@ -88,6 +90,8 @@ function bookingFromDB(r) {
     discountAmount: Number(r.discount_amount) || 0,
     totalCost: Number(r.total_cost) || 0,
     status: r.status || "active",
+    etaOut: r.eta_out || "",
+    etaBack: r.eta_back || "",
   };
 }
 
@@ -279,6 +283,23 @@ function getMonths(sd, ed) {
   }
   return res;
 }
+// "19:00" -> "7:00 PM". Times are stored as plain 24h strings, no timezone.
+function fmtTime(t) {
+  if (!t) return "";
+  const [hRaw, mRaw] = String(t).split(":");
+  const h = Number(hRaw), m = Number(mRaw);
+  if (isNaN(h)) return t;
+  const ap = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(isNaN(m) ? 0 : m).padStart(2, "0")} ${ap}`;
+}
+// Same two moments, named the way each service type experiences them.
+function etaLabels(serviceType) {
+  return serviceType === "delivery"
+    ? { out: "Delivery ETA", back: "Pickup ETA" }
+    : { out: "Customer Pickup ETA", back: "Return ETA" };
+}
+
 function localDateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -785,7 +806,10 @@ function SettingsPanel({
           <Divider />
           <Label>Text Message Templates</Label>
           <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, margin: "-4px 0 8px", lineHeight: 1.5 }}>
-            Used by the Messages tab. These placeholders auto-fill: {"{name} {items} {date} {service} {total}"}
+            Used by the Messages tab. These placeholders auto-fill: {"{name} {items} {date} {service} {total} {etaOut} {etaBack}"}
+            <div style={{ marginTop: 3 }}>
+              {"{etaOut}"} and {"{etaBack}"} always write out as “approximately 7:00 PM”, never an exact promise — and as “at a time we’ll confirm” when no ETA is set.
+            </div>
           </div>
           {[{ key: "confirm", label: "Booking confirmation" }, { key: "remind", label: "2-day reminder" }].map((tpl) => (
             <div key={tpl.key} style={{ marginBottom: 10 }}>
@@ -902,6 +926,19 @@ function BookingForm({
           <input type="date" style={inputStyle} min={form.startDate || startDate} max={endDate} value={form.endDate}
             onChange={(e) => setForm({ endDate: e.target.value })} />
           {formErrors.endDate && <div style={{ fontSize: 11, color: C.danger, marginTop: 4 }}>{formErrors.endDate}</div>}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+        <div>
+          <Label>{etaLabels(form.serviceType).out}</Label>
+          <input type="time" style={inputStyle} value={form.etaOut}
+            onChange={(e) => setForm({ etaOut: e.target.value })} />
+        </div>
+        <div>
+          <Label>{etaLabels(form.serviceType).back}</Label>
+          <input type="time" style={inputStyle} value={form.etaBack}
+            onChange={(e) => setForm({ etaBack: e.target.value })} />
         </div>
       </div>
 
@@ -1186,6 +1223,27 @@ function AddressLink({ address, size = 12, compact }) {
   );
 }
 
+// ─── ETA strip shown on booking cards / rows ─────────────────────────────────
+function EtaLine({ booking, size = 11 }) {
+  const { etaOut, etaBack } = booking;
+  if (!etaOut && !etaBack) return null;
+  const L = etaLabels(booking.serviceType);
+  const parts = [];
+  if (etaOut) parts.push({ k: "out", icon: "🚚", label: L.out, v: fmtTime(etaOut) });
+  if (etaBack) parts.push({ k: "back", icon: "↩", label: L.back, v: fmtTime(etaBack) });
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: size, fontFamily: T.sans, color: C.textSub, marginTop: 3 }}>
+      {parts.map((p) => (
+        <span key={p.k} title={p.label}>
+          <span aria-hidden="true">{p.icon}</span>{" "}
+          <span style={{ color: C.textMuted }}>{p.label.replace(" ETA", "")}</span>{" "}
+          <span style={{ fontWeight: 600, color: C.text, fontFamily: T.mono }}>{p.v}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ─── Booking Status ──────────────────────────────────────────────────────────
 const ST_ACTIVE = "active";
 const ST_OUT = "out";
@@ -1324,6 +1382,7 @@ function BookingsList({
                       <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginTop: 2 }}>
                         {b.salesRep} · {fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}
                       </div>
+                      <EtaLine booking={b} size={11} />
                       {b.address && (
                         <div style={{ marginTop: 4 }}>
                           <AddressLink address={b.address} size={12} />
@@ -1402,7 +1461,10 @@ function BookingsList({
                         {b.notes && <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{b.notes}</div>}
                       </td>
                       <td style={{ padding: "9px 10px", color: C.textSub }}>{b.salesRep}</td>
-                      <td style={{ padding: "9px 10px", color: C.textSub, whiteSpace: "nowrap" }}>{fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}</td>
+                      <td style={{ padding: "9px 10px", color: C.textSub, whiteSpace: "nowrap" }}>
+                        {fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}
+                        <EtaLine booking={b} size={10} />
+                      </td>
                       <td style={{ padding: "9px 10px", color: C.textMuted, fontFamily: T.mono, textAlign: "center" }}>{b.days}</td>
                       {itemDefs.map((it) => (
                         <td key={it.id} style={{ padding: "9px 10px", color: C.text, fontFamily: T.mono, textAlign: "center" }}>{b.items?.[it.id] || "—"}</td>
@@ -2276,14 +2338,18 @@ function RemindersView({ isMobile, bookings, itemDefs, onMarkSent, templates }) 
   }
   function fillTemplate(t, b) {
     const svc = b.serviceType === "delivery" ? "delivery to " + (b.address ? b.address : "your address") : "pickup";
+    // Always hedged: an ETA is an estimate, so the customer never reads a hard promise.
+    const approx = (v) => (v ? "approximately " + fmtTime(v) : "at a time we'll confirm");
     const map = {
       "{name}": b.name || "",
       "{items}": itemsSummary(b),
       "{date}": dateLabel(b),
       "{service}": svc,
       "{total}": (b.totalCost || 0).toFixed(0),
+      "{etaOut}": approx(b.etaOut),
+      "{etaBack}": approx(b.etaBack),
     };
-    return (t || "").replace(/\{name\}|\{items\}|\{date\}|\{service\}|\{total\}/g, (m) => map[m]);
+    return (t || "").replace(/\{name\}|\{items\}|\{date\}|\{service\}|\{total\}|\{etaOut\}|\{etaBack\}/g, (m) => map[m]);
   }
   const confirmMsg = (b) => fillTemplate(tplSet.confirm, b);
   const remindMsg = (b) => fillTemplate(tplSet.remind, b);
@@ -2501,6 +2567,7 @@ export default function App() {
     name: "", salesRep: "", startDate: "", endDate: "",
     items: {}, serviceType: "pickup", deliveryFee: "", address: "",
     discount: "", notes: "", phone: "", email: "",
+    etaOut: "", etaBack: "",
   };
   const [form, setFormRaw] = useState(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState({});
@@ -2595,6 +2662,8 @@ export default function App() {
       notes: form.notes.trim(),
       phone: form.phone.trim(),
       email: form.email.trim(),
+      etaOut: form.etaOut || "",
+      etaBack: form.etaBack || "",
       discount: parseFloat(form.discount) || 0,
       ...costs,
     };
@@ -2635,6 +2704,8 @@ export default function App() {
       notes: b.notes || "",
       phone: b.phone || "",
       email: b.email || "",
+      etaOut: b.etaOut || "",
+      etaBack: b.etaBack || "",
     });
     setFormErrors({});
     setEditingBookingId(b.id);
