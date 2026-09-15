@@ -293,11 +293,10 @@ function fmtTime(t) {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(isNaN(m) ? 0 : m).padStart(2, "0")} ${ap}`;
 }
-// Same two moments, named the way each service type experiences them.
-function etaLabels(serviceType) {
-  return serviceType === "delivery"
-    ? { out: "Delivery ETA", back: "Pickup ETA" }
-    : { out: "Customer Pickup ETA", back: "Return ETA" };
+// One pair of labels for both service types — each names both directions,
+// so it reads correctly whether the gear is dropped off or collected.
+function etaLabels() {
+  return { out: "Pickup/Dropoff ETA", back: "Return/Collect ETA" };
 }
 
 function localDateStr(d) {
@@ -931,12 +930,12 @@ function BookingForm({
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
         <div>
-          <Label>{etaLabels(form.serviceType).out}</Label>
+          <Label>{etaLabels().out}</Label>
           <input type="time" style={inputStyle} value={form.etaOut}
             onChange={(e) => setForm({ etaOut: e.target.value })} />
         </div>
         <div>
-          <Label>{etaLabels(form.serviceType).back}</Label>
+          <Label>{etaLabels().back}</Label>
           <input type="time" style={inputStyle} value={form.etaBack}
             onChange={(e) => setForm({ etaBack: e.target.value })} />
         </div>
@@ -1227,7 +1226,7 @@ function AddressLink({ address, size = 12, compact }) {
 function EtaLine({ booking, size = 11 }) {
   const { etaOut, etaBack } = booking;
   if (!etaOut && !etaBack) return null;
-  const L = etaLabels(booking.serviceType);
+  const L = etaLabels();
   const parts = [];
   if (etaOut) parts.push({ k: "out", icon: "🚚", label: L.out, v: fmtTime(etaOut) });
   if (etaBack) parts.push({ k: "back", icon: "↩", label: L.back, v: fmtTime(etaBack) });
