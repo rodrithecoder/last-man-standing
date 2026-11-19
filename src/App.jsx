@@ -15,7 +15,14 @@ const SK_SETTINGS = "rentalpro_settings_v1";
 const today = new Date().toISOString().split("T")[0];
 
 const UNCATEGORIZED = "Other";
-const SUGGESTED_CATEGORIES = ["Furniture", "Decoration", "Backdrop", "Cake Towers"];
+// Seed list only. The live list lives in settings.categories and is edited in Settings.
+const DEFAULT_CATEGORIES = ["Furniture", "Decoration", "Backdrop", "Cake Towers"];
+
+// An explicit [] means the user cleared the list and we respect that; a missing
+// key means these settings predate categories, so fall back to the seed list.
+function settingsCategories(settings) {
+  return Array.isArray(settings && settings.categories) ? settings.categories : DEFAULT_CATEGORIES;
+}
 
 const DEFAULT_ITEMS = [
   { id: "chairs", name: "Chairs", price: 3, inventory: 80, category: "Furniture" },
@@ -29,33 +36,42 @@ function itemCategory(it) {
   return c || UNCATEGORIZED;
 }
 // Every category in use, plus the suggestions, for the picker. "Other" last.
-function allCategories(itemDefs) {
+function allCategories(itemDefs, cats) {
   const seen = new Map();
-  [...SUGGESTED_CATEGORIES, ...(itemDefs || []).map(itemCategory)].forEach((c) => {
-    const k = c.toLowerCase();
+  // Managed list first, in the order the user arranged it; then anything still
+  // attached to an item but no longer on the list, so nothing silently vanishes.
+  [...(cats || []), ...(itemDefs || []).map(itemCategory)].forEach((c) => {
+    const k = String(c).toLowerCase();
     if (c !== UNCATEGORIZED && !seen.has(k)) seen.set(k, c);
   });
-  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  return [...seen.values()];
 }
 // Typing "backdrop" when "Backdrop" exists should not create a second category.
-function snapCategory(raw, itemDefs) {
+function snapCategory(raw, itemDefs, cats) {
   const c = String(raw || "").trim();
   if (!c) return "";
-  const match = allCategories(itemDefs).find((x) => x.toLowerCase() === c.toLowerCase());
+  const match = allCategories(itemDefs, cats).find((x) => x.toLowerCase() === c.toLowerCase());
   return match || c;
 }
 // Items grouped for display, in category order, each group keeping item order.
-function groupByCategory(itemDefs) {
+function groupByCategory(itemDefs, cats) {
   const groups = new Map();
   (itemDefs || []).forEach((it) => {
     const c = itemCategory(it);
     if (!groups.has(c)) groups.set(c, []);
     groups.get(c).push(it);
   });
+  // Display order follows the user's category list; categories not on the list
+  // come after it alphabetically, and "Other" always sits last.
+  const order = (cats || []).map((c) => String(c).toLowerCase());
+  const rank = (name) => {
+    if (name === UNCATEGORIZED) return [2, ""];
+    const i = order.indexOf(String(name).toLowerCase());
+    return i === -1 ? [1, String(name).toLowerCase()] : [0, String(i).padStart(4, "0")];
+  };
   return [...groups.entries()].sort((a, b) => {
-    if (a[0] === UNCATEGORIZED) return 1;
-    if (b[0] === UNCATEGORIZED) return -1;
-    return a[0].localeCompare(b[0]);
+    const [ga, ka] = rank(a[0]); const [gb, kb] = rank(b[0]);
+    return ga !== gb ? ga - gb : ka.localeCompare(kb);
   });
 }
 
@@ -66,6 +82,7 @@ const DEFAULT_MESSAGE_TEMPLATES = {
 
 const DEFAULT_SETTINGS = {
   items: DEFAULT_ITEMS,
+  categories: DEFAULT_CATEGORIES,
   messageTemplates: DEFAULT_MESSAGE_TEMPLATES,
   startDate: today,
   endDate: (() => {
@@ -703,6 +720,116 @@ function ConfirmDialog({ open, title, message, confirmLabel = "Confirm", danger,
 }
 
 // ─── Settings Panel ───────────────────────────────────────────────────────────
+// Add / rename / reorder / remove the category list. Renaming carries the items
+// with it; removing is confirmed inline and states how many items it moves.
+// A plain select over the managed list. An item whose category was removed keeps
+// showing its own value as an option, so editing it doesn't silently reassign it.
+function CategorySelect({ cats, value, onChange, style }) {
+  const opts = value && !cats.some((c) => c === value) ? [value, ...cats] : cats;
+  return (
+    <select style={style || { ...inp(false), fontSize: 12 }} value={value || ""}
+      onChange={(e) => onChange(e.target.value)}>
+      <option value="">{UNCATEGORIZED}</option>
+      {opts.map((c) => <option key={c} value={c}>{c}</option>)}
+    </select>
+  );
+}
+
+function CategoryEditor({ categories, items, onChange }) {
+  const [adding, setAdding] = useState("");
+  const [editIdx, setEditIdx] = useState(null);
+  const [editVal, setEditVal] = useState("");
+  const [removeIdx, setRemoveIdx] = useState(null);
+  const [err, setErr] = useState("");
+
+  const countFor = (c) => (items || []).filter((i) => itemCategory(i) === c).length;
+  const clash = (name, skip) =>
+    categories.some((c, i) => i !== skip && c.toLowerCase() === name.toLowerCase());
+
+  function add() {
+    const v = adding.trim();
+    if (!v) return;
+    if (v.toLowerCase() === UNCATEGORIZED.toLowerCase()) { setErr(`“${UNCATEGORIZED}” is built in — items with no category go there already.`); return; }
+    if (clash(v, -1)) { setErr(`“${v}” is already on the list.`); return; }
+    setErr(""); setAdding("");
+    onChange([...categories, v]);
+  }
+  function commitRename() {
+    const v = editVal.trim();
+    const from = categories[editIdx];
+    if (!v) { setErr("Category name can't be empty."); return; }
+    if (clash(v, editIdx)) { setErr(`“${v}” is already on the list.`); return; }
+    setErr(""); setEditIdx(null);
+    if (v === from) return;
+    onChange(categories.map((c, i) => (i === editIdx ? v : c)), { [from]: v });
+  }
+  function move(i, delta) {
+    const j = i + delta;
+    if (j < 0 || j >= categories.length) return;
+    const next = [...categories];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  }
+  function confirmRemove(i) {
+    const name = categories[i];
+    setRemoveIdx(null); setErr("");
+    // Items keep existing; they just fall back to "Other".
+    onChange(categories.filter((_, k) => k !== i), { [name]: "" });
+  }
+
+  const rowStyle = { display: "flex", alignItems: "center", gap: 6, padding: "5px 0", borderBottom: `1px solid ${C.border}` };
+  const iconBtn = { background: "none", border: `1px solid ${C.border}`, borderRadius: 3, cursor: "pointer", fontSize: 11, lineHeight: 1, padding: "4px 6px", color: C.textSub, fontFamily: T.sans };
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      {categories.length === 0 && (
+        <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, padding: "6px 0" }}>
+          No categories yet — every item will show under “{UNCATEGORIZED}”. Add one below.
+        </div>
+      )}
+      {categories.map((c, i) => (
+        <div key={c + i} style={rowStyle}>
+          {editIdx === i ? (
+            <>
+              <input autoFocus style={{ ...inp(false), fontSize: 12, flex: 1 }} value={editVal}
+                onChange={(e) => setEditVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setEditIdx(null); setErr(""); } }} />
+              <Btn small variant="primary" onClick={commitRename}>Save</Btn>
+              <Btn small variant="ghost" onClick={() => { setEditIdx(null); setErr(""); }}>Cancel</Btn>
+            </>
+          ) : removeIdx === i ? (
+            <>
+              <span style={{ flex: 1, fontSize: 11, fontFamily: T.sans, color: C.danger }}>
+                Remove “{c}”?{countFor(c) > 0 ? ` ${countFor(c)} item${countFor(c) > 1 ? "s" : ""} will move to ${UNCATEGORIZED}.` : " No items use it."}
+              </span>
+              <Btn small variant="primary" onClick={() => confirmRemove(i)}>Remove</Btn>
+              <Btn small variant="ghost" onClick={() => setRemoveIdx(null)}>Cancel</Btn>
+            </>
+          ) : (
+            <>
+              <span style={{ flex: 1, fontSize: 12, fontFamily: T.sans, color: C.text }}>{c}</span>
+              <span style={{ fontSize: 10, fontFamily: T.mono, color: C.textMuted }}>{countFor(c)}</span>
+              <button type="button" style={iconBtn} title="Move up" disabled={i === 0}
+                onClick={() => move(i, -1)}>▲</button>
+              <button type="button" style={iconBtn} title="Move down" disabled={i === categories.length - 1}
+                onClick={() => move(i, 1)}>▼</button>
+              <Btn small variant="ghost" onClick={() => { setEditIdx(i); setEditVal(c); setErr(""); }}>Rename</Btn>
+              <Btn small variant="ghost" style={{ color: C.danger }} onClick={() => { setRemoveIdx(i); setErr(""); }}>Remove</Btn>
+            </>
+          )}
+        </div>
+      ))}
+      {err && <div style={{ fontSize: 11, color: C.danger, fontFamily: T.sans, marginTop: 6 }}>{err}</div>}
+      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+        <input style={{ ...inp(false), fontSize: 12, flex: 1 }} placeholder="New category" value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
+        <Btn small onClick={add} disabled={!adding.trim()}>Add</Btn>
+      </div>
+    </div>
+  );
+}
+
 function SettingsPanel({
   isMobile, settings, settingsOpen, setSettingsOpen,
   settingsDraft, setSettingsDraft, settingsErr, setSettingsErr,
@@ -711,8 +838,10 @@ function SettingsPanel({
 }) {
   const inputStyle = inp(isMobile);
 
+  const draftCats = Array.isArray(settingsDraft.categories) ? settingsDraft.categories : DEFAULT_CATEGORIES;
+
   function openSettings() {
-    setSettingsDraft({ ...settings, items: settings.items.map((i) => ({ ...i })) });
+    setSettingsDraft({ ...settings, items: settings.items.map((i) => ({ ...i })), categories: [...settingsCategories(settings)] });
     setSettingsOpen(true);
     setSettingsErr("");
   }
@@ -741,7 +870,7 @@ function SettingsPanel({
     if (!itemDraft.name.trim()) { setItemErr("Name required."); return; }
     if (isNaN(price) || price < 0) { setItemErr("Valid price required."); return; }
     if (isNaN(inv) || inv < 1) { setItemErr("Inventory must be ≥ 1."); return; }
-    const cat = snapCategory(itemDraft.category, settingsDraft.items);
+    const cat = snapCategory(itemDraft.category, settingsDraft.items, settingsDraft.categories);
     if (editingItem === "new") {
       setSettingsDraft((d) => ({
         ...d,
@@ -786,14 +915,25 @@ function SettingsPanel({
           </div>
 
           <Divider />
-          <Label>Inventory Items</Label>
-          <datalist id="epk-categories">
-            {allCategories(settingsDraft.items).map((c) => <option key={c} value={c} />)}
-          </datalist>
+          <Label>Item Categories</Label>
           <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginBottom: 8 }}>
-            Category groups items on the booking form and the receipt. Pick an existing one or type a new one;
-            items left blank show under “{UNCATEGORIZED}”.
+            Categories group items on the booking form and the receipt, in the order listed here.
+            Items with no category show under “{UNCATEGORIZED}”.
           </div>
+          <CategoryEditor
+            categories={draftCats}
+            items={settingsDraft.items}
+            onChange={(next, renames) => setSettingsDraft((d) => ({
+              ...d,
+              categories: next,
+              items: renames
+                ? d.items.map((i) => (renames[itemCategory(i)] !== undefined ? { ...i, category: renames[itemCategory(i)] } : i))
+                : d.items,
+            }))}
+          />
+
+          <Divider />
+          <Label>Inventory Items</Label>
 
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 10 }}>
             <thead>
@@ -812,9 +952,9 @@ function SettingsPanel({
                         onChange={(e) => setItemDraft((d) => ({ ...d, name: e.target.value }))} />
                     </td>
                     <td style={{ padding: "4px 6px" }}>
-                      <input list="epk-categories" placeholder={UNCATEGORIZED}
-                        style={{ ...inp(false), fontSize: 12 }} value={itemDraft.category}
-                        onChange={(e) => setItemDraft((d) => ({ ...d, category: e.target.value }))} />
+                      <CategorySelect cats={allCategories(settingsDraft.items, draftCats)}
+                        value={itemDraft.category}
+                        onChange={(v) => setItemDraft((d) => ({ ...d, category: v }))} />
                     </td>
                     <td style={{ padding: "4px 6px" }}>
                       <input type="number" style={{ ...inp(false), fontSize: 12 }} value={itemDraft.price}
@@ -851,8 +991,9 @@ function SettingsPanel({
               <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
                 <input style={inputStyle} placeholder="Item name" value={itemDraft.name}
                   onChange={(e) => setItemDraft((d) => ({ ...d, name: e.target.value }))} />
-                <input list="epk-categories" style={inputStyle} placeholder="Category" value={itemDraft.category}
-                  onChange={(e) => setItemDraft((d) => ({ ...d, category: e.target.value }))} />
+                <CategorySelect cats={allCategories(settingsDraft.items, draftCats)}
+                  value={itemDraft.category} style={inputStyle}
+                  onChange={(v) => setItemDraft((d) => ({ ...d, category: v }))} />
                 <input type="number" style={inputStyle} placeholder="Price $" value={itemDraft.price}
                   onChange={(e) => setItemDraft((d) => ({ ...d, price: e.target.value }))} />
                 <input type="number" style={inputStyle} placeholder="Qty" value={itemDraft.inventory}
@@ -932,13 +1073,13 @@ function SettingsPanel({
 
 // ─── Booking Form ─────────────────────────────────────────────────────────────
 function BookingForm({
-  isMobile, itemDefs, startDate, endDate, bookings,
+  isMobile, itemDefs, categories, startDate, endDate, bookings,
   form, setForm, formErrors, successMsg,
   editingBookingId, cancelEdit, handleSubmit,
   rentalDays, getAvail, preview, formItemsMap,
 }) {
   const inputStyle = inp(isMobile);
-  const itemGroups = useMemo(() => groupByCategory(itemDefs), [itemDefs]);
+  const itemGroups = useMemo(() => groupByCategory(itemDefs, categories), [itemDefs, categories]);
 
   return (
     <div style={{ padding: isMobile ? "16px" : "16px 16px 24px" }}>
@@ -3053,7 +3194,7 @@ export default function App() {
     return !b.confirmSent || (d <= 3 && !b.confirmed);
   }).length;
   const bookingFormProps = {
-    isMobile, itemDefs, startDate, endDate, bookings,
+    isMobile, itemDefs, categories: settingsCategories(settings), startDate, endDate, bookings,
     form, setForm, formErrors, successMsg,
     editingBookingId, cancelEdit, handleSubmit,
     rentalDays, getAvail, preview, formItemsMap,
