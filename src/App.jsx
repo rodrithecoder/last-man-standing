@@ -80,9 +80,31 @@ const DEFAULT_MESSAGE_TEMPLATES = {
   remind: "Hi {name}! Reminder from EasyPartyKit.ca: your booking is coming up {date} — {items}. Reply YES to confirm, or let us know if anything changed. Thank you!",
 };
 
+const DEFAULT_BUSINESS = {
+  name: "EasyPartyKit.ca",
+  phone: "",
+  email: "",
+  website: "easypartykit.ca",
+  address: "",
+  gstNumber: "",
+  taxLabel: "GST",
+  taxRate: 0,          // percent. 0 = no tax line at all.
+  dueDays: 14,
+  paymentInstructions: "",
+  terms: "",
+};
+function businessInfo(settings) {
+  return { ...DEFAULT_BUSINESS, ...((settings && settings.business) || {}) };
+}
+// 369 -> "00369"
+function invoiceNoLabel(n) {
+  return n == null ? "" : String(n).padStart(5, "0");
+}
+
 const DEFAULT_SETTINGS = {
   items: DEFAULT_ITEMS,
   categories: DEFAULT_CATEGORIES,
+  business: DEFAULT_BUSINESS,
   messageTemplates: DEFAULT_MESSAGE_TEMPLATES,
   startDate: today,
   endDate: (() => {
@@ -116,6 +138,8 @@ function bookingToDB(b) {
     confirm_sent: b.confirmSent || false,
     discount: b.discount || 0,
     discount_mode: b.discountMode || "pct",
+    invoice_no: b.invoiceNo != null ? b.invoiceNo : null,
+    invoice_issued_at: b.invoiceIssuedAt || null,
     items_total: b.itemsTotal || 0,
     delivery_fee: b.deliveryFee || 0,
     discount_amount: b.discountAmount || 0,
@@ -143,6 +167,8 @@ function bookingFromDB(r) {
     confirmSent: !!r.confirm_sent,
     discount: Number(r.discount) || 0,
     discountMode: r.discount_mode === "amt" ? "amt" : "pct",
+    invoiceNo: r.invoice_no != null ? Number(r.invoice_no) : null,
+    invoiceIssuedAt: r.invoice_issued_at || null,
     itemsTotal: Number(r.items_total) || 0,
     deliveryFee: Number(r.delivery_fee) || 0,
     discountAmount: Number(r.discount_amount) || 0,
@@ -189,6 +215,22 @@ async function fetchSettings() {
     console.error("fetchSettings threw:", e);
     return { ok: false, error: e };
   }
+}
+
+// One number per booking, claimed once and kept. The sequence lives in Postgres
+// so two phones can never be handed the same number.
+async function claimInvoiceNoDB(bookingId) {
+  const { data, error } = await supabase.rpc("next_invoice_no");
+  if (error || data == null) {
+    console.error("next_invoice_no error:", error);
+    return null;
+  }
+  const n = Number(data);
+  const issuedAt = new Date().toISOString();
+  const { error: upErr } = await supabase
+    .from("bookings").update({ invoice_no: n, invoice_issued_at: issuedAt }).eq("id", bookingId);
+  if (upErr) { console.error("invoice number save error:", upErr); return null; }
+  return { invoiceNo: n, invoiceIssuedAt: issuedAt };
 }
 
 async function saveSettingsDB(settings) {
@@ -1014,6 +1056,60 @@ function SettingsPanel({
           )}
 
           <Divider />
+          <Label>Business Details (receipts &amp; invoices)</Label>
+          <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginBottom: 8 }}>
+            Printed at the top of every receipt. Leave a field blank and it is left off the document.
+          </div>
+          {(() => {
+            const biz = { ...DEFAULT_BUSINESS, ...(settingsDraft.business || {}) };
+            const setBiz = (patch) => setSettingsDraft((d) => ({ ...d, business: { ...biz, ...patch } }));
+            const F = ({ k, label, type, ph, area }) => (
+              <div style={{ marginBottom: 8 }}>
+                <Label>{label}</Label>
+                {area ? (
+                  <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 48, lineHeight: 1.4 }}
+                    placeholder={ph} value={biz[k] ?? ""} onChange={(e) => setBiz({ [k]: e.target.value })} />
+                ) : (
+                  <input type={type || "text"} style={inputStyle} placeholder={ph}
+                    value={biz[k] ?? ""} onChange={(e) => setBiz({ [k]: type === "number" ? e.target.value : e.target.value })} />
+                )}
+              </div>
+            );
+            return (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+                  <F k="name" label="Business Name" ph="EasyPartyKit.ca" />
+                  <F k="website" label="Website" ph="easypartykit.ca" />
+                  <F k="phone" label="Phone" ph="(604) 555-0123" />
+                  <F k="email" label="Email" ph="hello@easypartykit.ca" />
+                </div>
+                <F k="address" label="Address" ph="Street, City, BC  Postal" area />
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 1fr 1fr 1fr", gap: 10 }}>
+                  <F k="gstNumber" label="GST/HST Number" ph="not registered" />
+                  <F k="taxLabel" label="Tax Label" ph="GST" />
+                  <div style={{ marginBottom: 8 }}>
+                    <Label>Tax Rate (%)</Label>
+                    <input type="number" min={0} max={100} step="0.01" style={inputStyle} placeholder="0"
+                      value={biz.taxRate ?? 0} onChange={(e) => setBiz({ taxRate: e.target.value === "" ? 0 : parseFloat(e.target.value) })} />
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <Label>Payment Due (days)</Label>
+                    <input type="number" min={0} step="1" style={inputStyle} placeholder="14"
+                      value={biz.dueDays ?? 14} onChange={(e) => setBiz({ dueDays: e.target.value === "" ? 0 : parseInt(e.target.value) || 0 })} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginBottom: 8 }}>
+                  {Number(biz.taxRate) > 0
+                    ? `Receipts will show a ${biz.taxLabel || "tax"} line at ${biz.taxRate}%.`
+                    : "Tax rate is 0, so no tax line appears. Set it when you register for GST."}
+                </div>
+                <F k="paymentInstructions" label="Payment Instructions" ph="e-Transfer to hello@easypartykit.ca" area />
+                <F k="terms" label="Terms / Footer Note" ph="Deposit non-refundable within 48 hours of the event." area />
+              </div>
+            );
+          })()}
+
+          <Divider />
           <Label>Text Message Templates</Label>
           <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, margin: "-4px 0 8px", lineHeight: 1.5 }}>
             Used by the Messages tab. These placeholders auto-fill: {"{name} {items} {date} {service} {total} {etaOut} {etaBack}"}
@@ -1487,6 +1583,271 @@ function EtaLine({ booking, size = 11 }) {
   );
 }
 
+// ─── Receipt / Invoice ───────────────────────────────────────────────────────
+// One document, two states. RECEIPT is the paid state (what was collected);
+// INVOICE is the unpaid state (what is still owed, and by when).
+function invoiceTotals(booking, business, paidAmount) {
+  const items = Number(booking.itemsTotal) || 0;
+  const fee = Number(booking.deliveryFee) || 0;
+  const disc = Number(booking.discountAmount) || 0;
+  const net = items + fee - disc;                 // what totalCost already represents
+  const rate = Number(business.taxRate) || 0;
+  const tax = rate > 0 ? net * (rate / 100) : 0;
+  const total = net + tax;
+  const paid = Number(paidAmount) || 0;
+  return { items, fee, disc, net, rate, tax, total, paid, due: Math.max(total - paid, 0) };
+}
+
+function dueDateStr(issuedISO, dueDays) {
+  const base = issuedISO ? new Date(issuedISO) : new Date();
+  const d = new Date(base.getTime());
+  d.setDate(d.getDate() + (Number(dueDays) || 0));
+  return localDateStr(d);
+}
+
+function InvoiceDoc({ booking, business, itemDefs, categories, payments, mode, onClose, onIssue, issuing }) {
+  const paid = (payments || []).filter((p) => p.bookingId === booking.id);
+  const paidAmount = paid.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const t = invoiceTotals(booking, business, paidAmount);
+  const isReceipt = mode === "receipt";
+  const issued = booking.invoiceIssuedAt;
+  const lineGroups = groupByCategory(
+    itemDefs.filter((it) => booking.items && booking.items[it.id]), categories
+  );
+
+  const money = (n) => "$" + (Number(n) || 0).toFixed(2);
+  const lbl = { fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: C.textMuted, fontFamily: T.sans, fontWeight: 600 };
+  const val = { fontSize: 12, color: C.text, fontFamily: T.sans };
+  const row = { display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, padding: "3px 0" };
+
+  return (
+    <div className="epk-doc-sheet" style={{ background: "#fff", color: "#111", padding: "22px 24px", fontFamily: T.sans }}>
+      <div style={{ textAlign: "center", fontSize: 24, fontWeight: 800, letterSpacing: "0.02em", marginBottom: 18, color: C.accentDeep }}>
+        {isReceipt ? "Receipt" : "Invoice"}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
+        <div style={{ minWidth: 180 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{business.name}</div>
+          {business.address && <div style={{ ...val, color: C.textSub, whiteSpace: "pre-line" }}>{business.address}</div>}
+          {business.phone && <div style={{ ...val, color: C.textSub }}>{business.phone}</div>}
+          {business.email && <div style={{ ...val, color: C.textSub }}>{business.email}</div>}
+          {business.website && <div style={{ ...val, color: C.textSub }}>{business.website}</div>}
+          {business.gstNumber && <div style={{ ...val, color: C.textSub, marginTop: 4 }}>GST/HST No. {business.gstNumber}</div>}
+        </div>
+        <div style={{ minWidth: 150 }}>
+          <div style={lbl}>{isReceipt ? "Receipt #" : "Invoice #"}</div>
+          <div style={{ ...val, fontFamily: T.mono, fontWeight: 700 }}>
+            {booking.invoiceNo != null ? invoiceNoLabel(booking.invoiceNo) : "— not issued —"}
+          </div>
+          <div style={{ ...lbl, marginTop: 8 }}>{isReceipt ? "Receipt Date" : "Invoice Date"}</div>
+          <div style={{ ...val, fontFamily: T.mono }}>{issued ? localDateStr(new Date(issued)) : localDateStr(new Date())}</div>
+          {!isReceipt && (
+            <>
+              <div style={{ ...lbl, marginTop: 8 }}>Due Date</div>
+              <div style={{ ...val, fontFamily: T.mono }}>{dueDateStr(issued, business.dueDays)}</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ minWidth: 180 }}>
+          <div style={lbl}>Bill To</div>
+          <div style={{ ...val, fontWeight: 600 }}>{booking.name}</div>
+          {booking.phone && <div style={{ ...val, color: C.textSub }}>{booking.phone}</div>}
+          {booking.email && <div style={{ ...val, color: C.textSub }}>{booking.email}</div>}
+          {booking.address && <div style={{ ...val, color: C.textSub, whiteSpace: "pre-line" }}>{booking.address}</div>}
+        </div>
+        <div style={{ minWidth: 150 }}>
+          <div style={lbl}>Rental Period</div>
+          <div style={{ ...val, fontFamily: T.mono }}>{fmtDateShort(booking.startDate)} – {fmtDateShort(booking.endDate)}</div>
+          <div style={{ ...val, color: C.textSub }}>{booking.serviceType === "delivery" ? "Delivery" : "Pickup"}</div>
+          {(booking.etaOut || booking.etaBack) && (
+            <div style={{ ...val, color: C.textSub, fontSize: 11 }}>
+              {booking.etaOut && <>Out approx. {fmtTime(booking.etaOut)}<br /></>}
+              {booking.etaBack && <>Back approx. {fmtTime(booking.etaBack)}</>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{
+        // Green only when nothing is owed. Anything outstanding reads amber,
+        // on either document.
+        background: t.due <= 0 ? C.accentSoft : C.sunshineSoft,
+        border: `1px solid ${t.due <= 0 ? C.border : C.sunshine}`,
+        borderRadius: 3, padding: "10px 14px", marginBottom: 16,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: t.due <= 0 ? C.accentDeep : C.warning }}>
+            {isReceipt ? "Total Received" : "Amount Due"}
+          </span>
+          <span style={{ fontSize: 20, fontWeight: 800, fontFamily: T.mono, color: C.text }}>
+            {money(isReceipt ? t.paid : t.due)}
+          </span>
+        </div>
+        {isReceipt && t.due > 0 && (
+          <div style={{ fontSize: 11, color: C.danger, fontFamily: T.sans, marginTop: 4 }}>
+            Balance of {money(t.due)} still outstanding on this booking.
+          </div>
+        )}
+      </div>
+
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14 }}>
+        <thead>
+          <tr style={{ borderBottom: `2px solid ${C.borderStrong}` }}>
+            {["Qty", "Description", "Unit Price", "Amount"].map((h, i) => (
+              <th key={h} style={{ ...lbl, padding: "6px 6px", textAlign: i >= 2 ? "right" : "left" }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {lineGroups.map(([cat, items]) => (
+            <Fragment key={cat}>
+              {lineGroups.length > 1 && (
+                <tr><td colSpan={4} style={{ ...lbl, color: C.accent, padding: "9px 6px 2px" }}>{cat}</td></tr>
+              )}
+              {items.map((it) => {
+                const qty = booking.items[it.id];
+                return (
+                  <tr key={it.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12 }}>{qty}</td>
+                    <td style={{ padding: "6px 6px", fontSize: 12 }}>{it.name}</td>
+                    <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, textAlign: "right" }}>{money(it.price)}</td>
+                    <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, textAlign: "right" }}>{money(qty * it.price)}</td>
+                  </tr>
+                );
+              })}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={{ marginLeft: "auto", maxWidth: 280 }}>
+        <div style={row}><span>Items</span><span style={{ fontFamily: T.mono }}>{money(t.items)}</span></div>
+        {t.fee > 0 && <div style={row}><span>Delivery</span><span style={{ fontFamily: T.mono }}>{money(t.fee)}</span></div>}
+        {t.disc > 0 && (
+          <div style={{ ...row, color: C.danger }}>
+            <span>Discount{booking.discountMode === "amt" ? "" : ` (${discountLabel(booking)})`}</span>
+            <span style={{ fontFamily: T.mono }}>-{money(t.disc)}</span>
+          </div>
+        )}
+        {t.rate > 0 && (
+          <>
+            <div style={{ ...row, borderTop: `1px solid ${C.border}` }}><span>Subtotal</span><span style={{ fontFamily: T.mono }}>{money(t.net)}</span></div>
+            <div style={row}><span>{business.taxLabel} ({t.rate}%)</span><span style={{ fontFamily: T.mono }}>{money(t.tax)}</span></div>
+          </>
+        )}
+        <div style={{ ...row, borderTop: `2px solid ${C.borderStrong}`, fontWeight: 800, fontSize: 14, paddingTop: 6 }}>
+          <span>Total</span><span style={{ fontFamily: T.mono }}>{money(t.total)}</span>
+        </div>
+        <div style={row}><span>Amount Paid</span><span style={{ fontFamily: T.mono }}>{money(t.paid)}</span></div>
+        <div style={{ ...row, fontWeight: 700, color: t.due > 0 ? C.danger : C.accent }}>
+          <span>{t.due > 0 ? "Amount Due" : "Paid in Full"}</span>
+          <span style={{ fontFamily: T.mono }}>{money(t.due)}</span>
+        </div>
+      </div>
+
+      {(business.paymentInstructions || business.terms) && (
+        <div style={{ marginTop: 18, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+          <div style={lbl}>Terms &amp; Conditions</div>
+          {business.paymentInstructions && <div style={{ ...val, color: C.textSub, whiteSpace: "pre-line" }}>{business.paymentInstructions}</div>}
+          {business.terms && <div style={{ ...val, color: C.textSub, whiteSpace: "pre-line" }}>{business.terms}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onClose, onIssue }) {
+  const paidAmount = (payments || [])
+    .filter((p) => p.bookingId === booking.id)
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const t = invoiceTotals(booking, business, paidAmount);
+  // Default to whichever document matches reality; the toggle still overrides.
+  const [mode, setMode] = useState(t.due <= 0 && t.paid > 0 ? "receipt" : "invoice");
+  const [issuing, setIssuing] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function issue() {
+    setIssuing(true); setErr("");
+    const ok = await onIssue(booking);
+    setIssuing(false);
+    if (!ok) setErr("Couldn't get a number. Check your connection and try again — nothing was issued.");
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200,
+      overflowY: "auto", padding: 12,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680, margin: "0 auto" }}>
+        <div className="epk-doc-actions" style={{
+          display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+          background: C.surface, border: `1px solid ${C.border}`, borderRadius: "4px 4px 0 0",
+          padding: "10px 12px",
+        }}>
+          <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 3, overflow: "hidden" }}>
+            {[{ id: "invoice", label: "Invoice" }, { id: "receipt", label: "Receipt" }].map((m) => (
+              <button key={m.id} type="button" onClick={() => setMode(m.id)} aria-pressed={mode === m.id}
+                style={{
+                  padding: "8px 14px", border: "none", cursor: "pointer", fontFamily: T.sans,
+                  fontSize: 12, fontWeight: 700,
+                  background: mode === m.id ? C.accent : C.surface,
+                  color: mode === m.id ? "#fff" : C.textSub,
+                }}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <span style={{ fontSize: 11, fontFamily: T.sans, color: mode === "receipt" && t.due > 0 ? C.warning : C.textMuted }}>
+            {mode === "receipt"
+              ? (t.due > 0
+                  ? `Not paid in full — this receipt shows ${"$" + t.paid.toFixed(2)} received and notes the balance.`
+                  : "Shows what was collected.")
+              : "Shows what is still owed."}
+          </span>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            {booking.invoiceNo == null ? (
+              <Btn small variant="primary" onClick={issue} disabled={issuing}>
+                {issuing ? "Getting number…" : "Issue number"}
+              </Btn>
+            ) : (
+              <Btn small onClick={() => window.print()}>🖨 Print / PDF</Btn>
+            )}
+            <Btn small variant="ghost" onClick={onClose}>Close</Btn>
+          </div>
+        </div>
+
+        {booking.invoiceNo == null && (
+          <div className="epk-doc-actions" style={{
+            background: C.sunshineSoft, borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
+            padding: "8px 12px", fontSize: 11, color: C.warning, fontFamily: T.sans,
+          }}>
+            This is a preview. “Issue number” assigns {invoiceNoLabel(369)}-style number permanently — do that before sending it to the customer.
+          </div>
+        )}
+        {err && (
+          <div className="epk-doc-actions" style={{
+            background: C.brickSoft, borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
+            padding: "8px 12px", fontSize: 11, color: C.danger, fontFamily: T.sans,
+          }}>{err}</div>
+        )}
+
+        <InvoiceDoc booking={booking} business={business} itemDefs={itemDefs}
+          categories={categories} payments={payments} mode={mode} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Booking Status ──────────────────────────────────────────────────────────
 const ST_ACTIVE = "active";
 const ST_OUT = "out";
@@ -1516,7 +1877,7 @@ function BookingsList({
   filterStart, setFilterStart, filterEnd, setFilterEnd,
   filterStatus, setFilterStatus,
   startEditBooking, requestRemoveBooking, exportCSV,
-  requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, paidIds,
+  requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, requestInvoice, paidIds,
 }) {
   const inputStyle = inp(isMobile);
 
@@ -1655,8 +2016,13 @@ function BookingsList({
                     </span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</span>
                   </div>
+                  <div style={{ marginTop: 10, display: "flex", gap: 6 }}>
+                    <Btn variant="ghost" onClick={() => requestInvoice(b)} style={{ whiteSpace: "nowrap" }}>
+                      🧾 Receipt
+                    </Btn>
+                  </div>
                   {!isDone && (
-                    <div style={{ marginTop: 10, display: "flex", gap: 6 }}>
+                    <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
                       {st === ST_ACTIVE ? (
                         <Btn variant="primary" fullWidth onClick={() => requestMarkOut(b)}>
                           {b.serviceType === "delivery" ? "🚚 Delivered" : "📦 Picked Up by Customer"}
@@ -1739,6 +2105,7 @@ function BookingsList({
                             ↩ {isDone ? "Reopen" : "Undo"}
                           </Btn>
                         )}
+                        <Btn small variant="ghost" onClick={() => requestInvoice(b)} style={{ marginRight: 4 }} title="Receipt / invoice">🧾</Btn>
                         <Btn small variant="ghost" onClick={() => startEditBooking(b)}>{isDone ? "Open" : "Edit"}</Btn>
                         <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
                       </td>
@@ -2737,6 +3104,7 @@ export default function App() {
   const [loadError, setLoadError] = useState("");
 
   const [doneDialog, setDoneDialog] = useState(null);
+  const [invoiceFor, setInvoiceFor] = useState(null);
   const [settleDialog, setSettleDialog] = useState(false);
   const [expenseDialog, setExpenseDialog] = useState(false);
 
@@ -3047,6 +3415,17 @@ export default function App() {
     else setDoneDialog({ booking: b, complete: true });
   }
   // Undo a mis-tap: out -> active, done -> out. Never touches recorded payments.
+  function requestInvoice(b) { setInvoiceFor(b); }
+  // Claims a number once and keeps it. Returns false so the overlay can say so.
+  async function issueInvoiceNo(b) {
+    if (b.invoiceNo != null) return true;
+    const res = await claimInvoiceNoDB(b.id);
+    if (!res) return false;
+    setBookings((bs) => bs.map((x) => (x.id === b.id ? { ...x, ...res } : x)));
+    setInvoiceFor((cur) => (cur && cur.id === b.id ? { ...cur, ...res } : cur));
+    return true;
+  }
+
   function requestStepBack(b) { setStatus(b, bStatus(b) === "done" ? "out" : "active"); }
   // Payment on its own, at any stage — leaves the booking's status alone.
   function requestRecordPayment(b) { setDoneDialog({ booking: b, complete: false }); }
@@ -3209,13 +3588,14 @@ export default function App() {
     vacations,  // NEW
   };
   const paidIds = useMemo(() => new Set(payments.map((p) => p.bookingId)), [payments]);
+  const invoiceBooking = invoiceFor ? (bookings.find((b) => b.id === invoiceFor.id) || invoiceFor) : null;
   const listProps = {
     isMobile, bookings, itemDefs,
     search, setSearch, filterService, setFilterService,
     filterStart, setFilterStart, filterEnd, setFilterEnd,
     filterStatus, setFilterStatus,
     startEditBooking, requestRemoveBooking, exportCSV,
-    requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, paidIds,
+    requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, requestInvoice, paidIds,
   };
 
   const accountsProps = {
@@ -3303,6 +3683,11 @@ export default function App() {
           onConfirm={confirmState?.onConfirm}
           onCancel={() => setConfirmState(null)}
         />
+        {invoiceBooking && (
+          <InvoiceOverlay booking={invoiceBooking} business={businessInfo(settings)}
+            itemDefs={itemDefs} categories={settingsCategories(settings)} payments={payments}
+            onClose={() => setInvoiceFor(null)} onIssue={issueInvoiceNo} />
+        )}
         <MarkDoneDialog
           open={!!doneDialog}
           booking={doneDialog?.booking}
@@ -3370,6 +3755,11 @@ export default function App() {
         onConfirm={confirmState?.onConfirm}
         onCancel={() => setConfirmState(null)}
       />
+      {invoiceBooking && (
+        <InvoiceOverlay booking={invoiceBooking} business={businessInfo(settings)}
+          itemDefs={itemDefs} categories={settingsCategories(settings)} payments={payments}
+          onClose={() => setInvoiceFor(null)} onIssue={issueInvoiceNo} />
+      )}
       <MarkDoneDialog
         open={!!doneDialog}
         booking={doneDialog?.booking}
