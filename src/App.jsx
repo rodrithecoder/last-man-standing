@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ─── Supabase Client ──────────────────────────────────────────────────────────
@@ -14,11 +14,50 @@ const SK_SETTINGS = "rentalpro_settings_v1";
 // ─── Defaults ────────────────────────────────────────────────────────────────
 const today = new Date().toISOString().split("T")[0];
 
+const UNCATEGORIZED = "Other";
+const SUGGESTED_CATEGORIES = ["Furniture", "Decoration", "Backdrop", "Cake Towers"];
+
 const DEFAULT_ITEMS = [
-  { id: "chairs", name: "Chairs", price: 3, inventory: 80 },
-  { id: "tables_6ft", name: "6ft Tables", price: 15, inventory: 6 },
-  { id: "coolers", name: "Coolers", price: 20, inventory: 2 },
+  { id: "chairs", name: "Chairs", price: 3, inventory: 80, category: "Furniture" },
+  { id: "tables_6ft", name: "6ft Tables", price: 15, inventory: 6, category: "Furniture" },
+  { id: "coolers", name: "Coolers", price: 20, inventory: 2, category: "Furniture" },
 ];
+
+// An item with no category is shown under "Other" rather than a blank heading.
+function itemCategory(it) {
+  const c = (it && it.category ? String(it.category) : "").trim();
+  return c || UNCATEGORIZED;
+}
+// Every category in use, plus the suggestions, for the picker. "Other" last.
+function allCategories(itemDefs) {
+  const seen = new Map();
+  [...SUGGESTED_CATEGORIES, ...(itemDefs || []).map(itemCategory)].forEach((c) => {
+    const k = c.toLowerCase();
+    if (c !== UNCATEGORIZED && !seen.has(k)) seen.set(k, c);
+  });
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+// Typing "backdrop" when "Backdrop" exists should not create a second category.
+function snapCategory(raw, itemDefs) {
+  const c = String(raw || "").trim();
+  if (!c) return "";
+  const match = allCategories(itemDefs).find((x) => x.toLowerCase() === c.toLowerCase());
+  return match || c;
+}
+// Items grouped for display, in category order, each group keeping item order.
+function groupByCategory(itemDefs) {
+  const groups = new Map();
+  (itemDefs || []).forEach((it) => {
+    const c = itemCategory(it);
+    if (!groups.has(c)) groups.set(c, []);
+    groups.get(c).push(it);
+  });
+  return [...groups.entries()].sort((a, b) => {
+    if (a[0] === UNCATEGORIZED) return 1;
+    if (b[0] === UNCATEGORIZED) return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
 
 const DEFAULT_MESSAGE_TEMPLATES = {
   confirm: "Hi {name}! You're booked with EasyPartyKit.ca. {items} for {date} ({service}). Total ${total}. We'll text a reminder 2 days before. Reply here with any questions — thank you!",
@@ -59,6 +98,7 @@ function bookingToDB(b) {
     confirmed: b.confirmed || false,
     confirm_sent: b.confirmSent || false,
     discount: b.discount || 0,
+    discount_mode: b.discountMode || "pct",
     items_total: b.itemsTotal || 0,
     delivery_fee: b.deliveryFee || 0,
     discount_amount: b.discountAmount || 0,
@@ -85,6 +125,7 @@ function bookingFromDB(r) {
     confirmed: !!r.confirmed,
     confirmSent: !!r.confirm_sent,
     discount: Number(r.discount) || 0,
+    discountMode: r.discount_mode === "amt" ? "amt" : "pct",
     itemsTotal: Number(r.items_total) || 0,
     deliveryFee: Number(r.delivery_fee) || 0,
     discountAmount: Number(r.discount_amount) || 0,
@@ -345,12 +386,21 @@ function maxUsedInRange(bookings, start, end, itemId, excludeId = null) {
   }
   return max;
 }
-function calcTotal(itemsMap, itemDefs, svcType, deliveryFee, discount) {
+// discountMode: "pct" (default, back-compatible) or "amt" for a flat dollar discount.
+function calcTotal(itemsMap, itemDefs, svcType, deliveryFee, discount, discountMode) {
   const itemsTotal = itemDefs.reduce((s, it) => s + (itemsMap[it.id] || 0) * it.price, 0);
   const fee = svcType === "delivery" ? parseFloat(deliveryFee) || 0 : 0;
   const sub = itemsTotal + fee;
-  const disc = sub * ((parseFloat(discount) || 0) / 100);
+  const d = parseFloat(discount) || 0;
+  // Never let a discount push the total below zero.
+  const disc = discountMode === "amt" ? Math.min(Math.max(d, 0), sub) : sub * (d / 100);
   return { itemsTotal, deliveryFee: fee, discountAmount: disc, totalCost: sub - disc };
+}
+// "10%" or "$25.00" — one place, so the form, the table and the receipt agree.
+function discountLabel(b) {
+  const d = Number(b && b.discount) || 0;
+  if (!d) return "";
+  return (b.discountMode === "amt") ? "$" + d.toFixed(2) : d + "%";
 }
 
 // CSV export helper (bookings only — keeps existing behavior)
@@ -359,7 +409,7 @@ function bookingsToCSV(bookings, itemDefs) {
     "Customer", "Sales Rep", "Start", "End", "Days",
     ...itemDefs.map((i) => i.name),
     "Service", "Address", "Subtotal", "Delivery Fee",
-    "Discount %", "Discount $", "Total", "Notes", "Phone", "Email",
+    "Discount", "Discount $", "Total", "Notes", "Phone", "Email",
   ];
   const escape = (v) => {
     const s = String(v ?? "");
@@ -372,7 +422,7 @@ function bookingsToCSV(bookings, itemDefs) {
       b.serviceType, b.address || "",
       (b.itemsTotal || 0).toFixed(2),
       (b.deliveryFee || 0).toFixed(2),
-      b.discount || 0,
+      discountLabel(b),
       (b.discountAmount || 0).toFixed(2),
       b.totalCost.toFixed(2),
       b.notes || "",
@@ -439,7 +489,7 @@ function buildBackupCSV({ bookings, vacations, payments, settlements, expenses, 
       "ID", "Customer", "Sales Rep", "Start", "End", "Days",
       ...itemDefs.map((i) => i.name),
       "Service", "Address", "Subtotal", "Delivery Fee",
-      "Discount %", "Discount $", "Total", "Status", "Notes", "Phone", "Email", "Confirmed",
+      "Discount", "Discount $", "Total", "Status", "Notes", "Phone", "Email", "Confirmed",
     ],
     bookings.map((b) => [
       b.id, b.name, b.salesRep, b.startDate, b.endDate, b.days,
@@ -447,7 +497,7 @@ function buildBackupCSV({ bookings, vacations, payments, settlements, expenses, 
       b.serviceType, b.address || "",
       (b.itemsTotal || 0).toFixed(2),
       (b.deliveryFee || 0).toFixed(2),
-      b.discount || 0,
+      discountLabel(b),
       (b.discountAmount || 0).toFixed(2),
       (b.totalCost || 0).toFixed(2),
       b.status || "active",
@@ -677,12 +727,12 @@ function SettingsPanel({
   }
   function startEditItem(item) {
     setEditingItem(item.id);
-    setItemDraft({ name: item.name, price: item.price, inventory: item.inventory });
+    setItemDraft({ name: item.name, price: item.price, inventory: item.inventory, category: item.category || "" });
     setItemErr("");
   }
   function startNewItem() {
     setEditingItem("new");
-    setItemDraft({ name: "", price: "", inventory: "" });
+    setItemDraft({ name: "", price: "", inventory: "", category: "" });
     setItemErr("");
   }
   function saveItem() {
@@ -691,16 +741,17 @@ function SettingsPanel({
     if (!itemDraft.name.trim()) { setItemErr("Name required."); return; }
     if (isNaN(price) || price < 0) { setItemErr("Valid price required."); return; }
     if (isNaN(inv) || inv < 1) { setItemErr("Inventory must be ≥ 1."); return; }
+    const cat = snapCategory(itemDraft.category, settingsDraft.items);
     if (editingItem === "new") {
       setSettingsDraft((d) => ({
         ...d,
-        items: [...d.items, { id: genId(), name: itemDraft.name.trim(), price, inventory: inv }],
+        items: [...d.items, { id: genId(), name: itemDraft.name.trim(), price, inventory: inv, category: cat }],
       }));
     } else {
       setSettingsDraft((d) => ({
         ...d,
         items: d.items.map((i) =>
-          i.id === editingItem ? { ...i, name: itemDraft.name.trim(), price, inventory: inv } : i
+          i.id === editingItem ? { ...i, name: itemDraft.name.trim(), price, inventory: inv, category: cat } : i
         ),
       }));
     }
@@ -736,11 +787,18 @@ function SettingsPanel({
 
           <Divider />
           <Label>Inventory Items</Label>
+          <datalist id="epk-categories">
+            {allCategories(settingsDraft.items).map((c) => <option key={c} value={c} />)}
+          </datalist>
+          <div style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, marginBottom: 8 }}>
+            Category groups items on the booking form and the receipt. Pick an existing one or type a new one;
+            items left blank show under “{UNCATEGORIZED}”.
+          </div>
 
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 10 }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                {["Item", "Price", "Qty", ""].map((h) => (
+                {["Item", "Category", "Price", "Qty", ""].map((h) => (
                   <th key={h} style={{ padding: "5px 6px", textAlign: "left", fontSize: 10, color: C.textMuted, fontFamily: T.sans, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr>
@@ -752,6 +810,11 @@ function SettingsPanel({
                     <td style={{ padding: "4px 6px" }}>
                       <input style={{ ...inp(false), fontSize: 12 }} value={itemDraft.name}
                         onChange={(e) => setItemDraft((d) => ({ ...d, name: e.target.value }))} />
+                    </td>
+                    <td style={{ padding: "4px 6px" }}>
+                      <input list="epk-categories" placeholder={UNCATEGORIZED}
+                        style={{ ...inp(false), fontSize: 12 }} value={itemDraft.category}
+                        onChange={(e) => setItemDraft((d) => ({ ...d, category: e.target.value }))} />
                     </td>
                     <td style={{ padding: "4px 6px" }}>
                       <input type="number" style={{ ...inp(false), fontSize: 12 }} value={itemDraft.price}
@@ -769,6 +832,7 @@ function SettingsPanel({
                 ) : (
                   <tr key={it.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: "6px 6px", fontFamily: T.sans, fontSize: 12, color: C.text }}>{it.name}</td>
+                    <td style={{ padding: "6px 6px", fontFamily: T.sans, fontSize: 11, color: it.category ? C.textSub : C.textMuted }}>{itemCategory(it)}</td>
                     <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, color: C.textSub }}>${it.price}</td>
                     <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, color: C.textSub }}>{it.inventory}</td>
                     <td style={{ padding: "6px 6px", whiteSpace: "nowrap" }}>
@@ -784,9 +848,11 @@ function SettingsPanel({
           {editingItem === "new" ? (
             <div style={{ background: C.accentSoft, border: `1px solid ${C.border}`, borderRadius: 3, padding: "10px 12px", marginBottom: 10 }}>
               <Label>New Item</Label>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
                 <input style={inputStyle} placeholder="Item name" value={itemDraft.name}
                   onChange={(e) => setItemDraft((d) => ({ ...d, name: e.target.value }))} />
+                <input list="epk-categories" style={inputStyle} placeholder="Category" value={itemDraft.category}
+                  onChange={(e) => setItemDraft((d) => ({ ...d, category: e.target.value }))} />
                 <input type="number" style={inputStyle} placeholder="Price $" value={itemDraft.price}
                   onChange={(e) => setItemDraft((d) => ({ ...d, price: e.target.value }))} />
                 <input type="number" style={inputStyle} placeholder="Qty" value={itemDraft.inventory}
@@ -872,6 +938,7 @@ function BookingForm({
   rentalDays, getAvail, preview, formItemsMap,
 }) {
   const inputStyle = inp(isMobile);
+  const itemGroups = useMemo(() => groupByCategory(itemDefs), [itemDefs]);
 
   return (
     <div style={{ padding: isMobile ? "16px" : "16px 16px 24px" }}>
@@ -960,7 +1027,16 @@ function BookingForm({
             </tr>
           </thead>
           <tbody>
-            {itemDefs.map((it) => {
+            {itemGroups.map(([cat, items]) => (
+            <Fragment key={cat}>
+              {itemGroups.length > 1 && (
+                <tr>
+                  <td colSpan={4} style={{ padding: "10px 6px 3px", fontSize: 10, fontFamily: T.sans, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.accent }}>
+                    {cat}
+                  </td>
+                </tr>
+              )}
+              {items.map((it) => {
               const avail = getAvail(it.id);
               const err = formErrors[`item_${it.id}`];
               return (
@@ -980,6 +1056,8 @@ function BookingForm({
                 </tr>
               );
             })}
+            </Fragment>
+            ))}
           </tbody>
         </table>
       </div>
@@ -1010,9 +1088,30 @@ function BookingForm({
         </>
       )}
 
-      <Field label="Discount (%)" error={formErrors.discount}>
-        <input type="number" style={inputStyle} min={0} max={100} placeholder="0"
-          value={form.discount} onChange={(e) => setForm({ discount: e.target.value })} />
+      <Field label="Discount" error={formErrors.discount}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 3, overflow: "hidden", flex: "0 0 auto" }}>
+            {[{ id: "pct", label: "%" }, { id: "amt", label: "$" }].map((m) => (
+              <button key={m.id} type="button"
+                onClick={() => setForm({ discountMode: m.id })}
+                aria-pressed={form.discountMode === m.id}
+                title={m.id === "pct" ? "Percentage off the subtotal" : "Flat dollar amount off"}
+                style={{
+                  width: isMobile ? 46 : 38, padding: isMobile ? "10px 0" : "7px 0", border: "none", cursor: "pointer",
+                  fontFamily: T.sans, fontSize: 13, fontWeight: 700,
+                  background: form.discountMode === m.id ? C.accent : C.surface,
+                  color: form.discountMode === m.id ? "#fff" : C.textSub, transition: "all 0.15s",
+                }}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <input type="number" style={{ ...inputStyle, flex: 1 }} min={0}
+            max={form.discountMode === "pct" ? 100 : undefined}
+            step={form.discountMode === "pct" ? 1 : 0.01}
+            placeholder={form.discountMode === "pct" ? "0" : "0.00"}
+            value={form.discount} onChange={(e) => setForm({ discount: e.target.value })} />
+        </div>
       </Field>
 
       <Field label="Notes">
@@ -1042,7 +1141,7 @@ function BookingForm({
           )}
           {preview.discountAmount > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, color: C.danger, marginBottom: 4 }}>
-              <span>Discount ({form.discount}%)</span>
+              <span>Discount ({form.discountMode === "amt" ? `$${form.discount}` : `${form.discount}%`})</span>
               <span style={{ fontFamily: T.mono }}>-${preview.discountAmount.toFixed(2)}</span>
             </div>
           )}
@@ -1476,7 +1575,7 @@ function BookingsList({
                       </td>
                       <td style={{ padding: "9px 10px", color: C.textSub, fontFamily: T.mono }}>${b.itemsTotal?.toFixed(2) || "—"}</td>
                       <td style={{ padding: "9px 10px", color: C.textSub, fontFamily: T.mono }}>{b.deliveryFee > 0 ? `$${b.deliveryFee.toFixed(2)}` : "—"}</td>
-                      <td style={{ padding: "9px 10px", color: b.discount > 0 ? C.danger : C.textMuted, fontFamily: T.mono }}>{b.discount > 0 ? `-${b.discount}%` : "—"}</td>
+                      <td style={{ padding: "9px 10px", color: b.discount > 0 ? C.danger : C.textMuted, fontFamily: T.mono }}>{b.discount > 0 ? `-${discountLabel(b)}` : "—"}</td>
                       <td style={{ padding: "9px 10px", fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</td>
                       <td style={{ padding: "9px 10px", whiteSpace: "nowrap" }}>
                         {st === ST_ACTIVE && (
@@ -2559,13 +2658,13 @@ export default function App() {
   const [settingsErr, setSettingsErr] = useState("");
 
   const [editingItem, setEditingItem] = useState(null);
-  const [itemDraft, setItemDraft] = useState({ name: "", price: "", inventory: "" });
+  const [itemDraft, setItemDraft] = useState({ name: "", price: "", inventory: "", category: "" });
   const [itemErr, setItemErr] = useState("");
 
   const EMPTY_FORM = {
     name: "", salesRep: "", startDate: "", endDate: "",
     items: {}, serviceType: "pickup", deliveryFee: "", address: "",
-    discount: "", notes: "", phone: "", email: "",
+    discount: "", discountMode: "pct", notes: "", phone: "", email: "",
     etaOut: "", etaBack: "",
   };
   const [form, setFormRaw] = useState(EMPTY_FORM);
@@ -2638,7 +2737,15 @@ export default function App() {
       }
     });
     if (f.serviceType === "delivery" && f.deliveryFee !== "" && isNaN(f.deliveryFee)) e.deliveryFee = "Invalid";
-    if (f.discount !== "" && (isNaN(f.discount) || +f.discount < 0 || +f.discount > 100)) e.discount = "0–100 only";
+    if (f.discount !== "") {
+      const d = +f.discount;
+      if (isNaN(d) || d < 0) e.discount = "Enter a positive number, or leave blank.";
+      else if (f.discountMode === "amt") {
+        const sub = itemDefs.reduce((s, it) => s + (parseInt(f.items[it.id]) || 0) * it.price, 0)
+          + (f.serviceType === "delivery" ? parseFloat(f.deliveryFee) || 0 : 0);
+        if (d > sub) e.discount = `Can't discount more than the $${sub.toFixed(2)} subtotal.`;
+      } else if (d > 100) e.discount = "A percentage can't be over 100.";
+    }
     return e;
   }
 
@@ -2648,7 +2755,7 @@ export default function App() {
     if (Object.keys(e).length) return;
     const itemsMap = {};
     itemDefs.forEach((it) => { itemsMap[it.id] = parseInt(form.items[it.id]) || 0; });
-    const costs = calcTotal(itemsMap, itemDefs, form.serviceType, form.deliveryFee, form.discount);
+    const costs = calcTotal(itemsMap, itemDefs, form.serviceType, form.deliveryFee, form.discount, form.discountMode);
     const baseBooking = {
       name: form.name.trim(),
       salesRep: form.salesRep.trim(),
@@ -2664,6 +2771,7 @@ export default function App() {
       etaOut: form.etaOut || "",
       etaBack: form.etaBack || "",
       discount: parseFloat(form.discount) || 0,
+      discountMode: form.discountMode === "amt" ? "amt" : "pct",
       ...costs,
     };
 
@@ -2700,6 +2808,7 @@ export default function App() {
       deliveryFee: b.deliveryFee ? String(b.deliveryFee) : "",
       address: b.address || "",
       discount: b.discount ? String(b.discount) : "",
+      discountMode: b.discountMode === "amt" ? "amt" : "pct",
       notes: b.notes || "",
       phone: b.phone || "",
       email: b.email || "",
@@ -2877,7 +2986,7 @@ export default function App() {
   itemDefs.forEach((it) => { formItemsMap[it.id] = parseInt(form.items[it.id]) || 0; });
   const anyItem = itemDefs.some((it) => formItemsMap[it.id] > 0);
   const preview = anyItem
-    ? calcTotal(formItemsMap, itemDefs, form.serviceType, form.deliveryFee, form.discount)
+    ? calcTotal(formItemsMap, itemDefs, form.serviceType, form.deliveryFee, form.discount, form.discountMode)
     : null;
   const totalRevenue = bookings.reduce((s, b) => s + b.totalCost, 0);
 
