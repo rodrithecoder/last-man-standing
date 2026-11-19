@@ -838,7 +838,11 @@ function SettingsPanel({
 }) {
   const inputStyle = inp(isMobile);
 
-  const draftCats = Array.isArray(settingsDraft.categories) ? settingsDraft.categories : DEFAULT_CATEGORIES;
+  // settingsDraft is null until the panel is first opened, and this runs on every
+  // render — above the guard — so it must tolerate null.
+  const draftCats = Array.isArray(settingsDraft && settingsDraft.categories)
+    ? settingsDraft.categories
+    : DEFAULT_CATEGORIES;
 
   function openSettings() {
     setSettingsDraft({ ...settings, items: settings.items.map((i) => ({ ...i })), categories: [...settingsCategories(settings)] });
