@@ -630,27 +630,28 @@ function useWindowWidth() {
 }
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
+// Easy Party Kit palette: sage, olive, terracotta, peach and warm cream.
 const C = {
-  bg: "#fafaf6",
-  surface: "#ffffff",
-  border: "#e4e4dc",
-  borderStrong: "#cdcdbf",
-  text: "#1c2620",
-  textSub: "#5e6a62",
-  textMuted: "#9aa39c",
-  accent: "#2d6a4f",
-  accentDeep: "#1f4d39",
-  accentSoft: "#e3f0e7",
-  sunshine: "#fbcf3c",
-  sunshineSoft: "#fff4cc",
-  brick: "#b73c2a",
-  brickSoft: "#fbe7e3",
-  danger: "#b73c2a",
-  success: "#2d6a4f",
-  warning: "#7a5800",
-  cap50: "#cfe9d6",
-  cap80: "#ffe89a",
-  cap100: "#f5c2b8",
+  bg: "#F7F4EC",
+  surface: "#FFFCF7",
+  border: "#E2DACB",
+  borderStrong: "#C9BFAE",
+  text: "#302F29",
+  textSub: "#5E6252",
+  textMuted: "#77796B",
+  accent: "#687454",
+  accentDeep: "#4D5841",
+  accentSoft: "#E8EBDD",
+  sunshine: "#DDA17C",
+  sunshineSoft: "#FAEADB",
+  brick: "#B85E42",
+  brickSoft: "#F8E5DC",
+  danger: "#AD4539",
+  success: "#516D4D",
+  warning: "#805924",
+  cap50: "#DCE7D5",
+  cap80: "#F4E1BB",
+  cap100: "#F3CDBF",
 };
 
 const T = {
@@ -2864,13 +2865,19 @@ function Header({ isMobile, bookings, totalRevenue }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, minWidth: 0 }}>
         <div style={{
-          width: isMobile ? 34 : 40, height: isMobile ? 34 : 40,
-          borderRadius: "50%", background: C.sunshine, color: C.accentDeep,
+          width: isMobile ? 39 : 48, height: isMobile ? 44 : 51,
+          borderRadius: 8, background: "#F8F6EF",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: isMobile ? 18 : 22, fontWeight: 800,
-          flexShrink: 0, boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
-        }} aria-label="EasyPartyKit.ca logo">
-          🎈
+          flexShrink: 0, overflow: "hidden",
+          boxShadow: "0 1px 3px rgba(23,30,18,0.17)",
+        }}>
+          <img
+            src="/easy-party-kit-mark.svg"
+            alt="Easy Party Kit logo"
+            width={isMobile ? 36 : 42}
+            height={isMobile ? 42 : 49}
+            style={{ display: "block", objectFit: "contain" }}
+          />
         </div>
         <div style={{ minWidth: 0 }}>
           <div style={{
