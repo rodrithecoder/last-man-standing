@@ -21,8 +21,8 @@ const DEFAULT_ITEMS = [
 ];
 
 const DEFAULT_MESSAGE_TEMPLATES = {
-  confirm: "Hi {name}! You're booked with Last Man Standing. {items} for {date} ({service}). Total ${total}. We'll text a reminder 2 days before. Reply here with any questions — thank you!",
-  remind: "Hi {name}! Reminder from Last Man Standing: your booking is coming up {date} — {items}. Reply YES to confirm, or let us know if anything changed. Thank you!",
+  confirm: "Hi {name}! You're booked with EasyPartyKit.ca. {items} for {date} ({service}). Total ${total}. We'll text a reminder 2 days before. Reply here with any questions — thank you!",
+  remind: "Hi {name}! Reminder from EasyPartyKit.ca: your booking is coming up {date} — {items}. Reply YES to confirm, or let us know if anything changed. Thank you!",
 };
 
 const DEFAULT_SETTINGS = {
@@ -415,7 +415,7 @@ function buildBackupCSV({ bookings, vacations, payments, settlements, expenses, 
 
   const stamp = new Date().toISOString();
   const meta = section("BACKUP META", ["Generated", "App"],
-    [[stamp, "Last Man Standing — Rental Manager"]]);
+    [[stamp, "EasyPartyKit.ca — Rental Manager"]]);
 
   // SETTINGS as a labeled section — critical for full recovery
   const settingsRows = settings ? [
@@ -2258,23 +2258,23 @@ function Header({ isMobile, bookings, totalRevenue }) {
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: isMobile ? 18 : 22, fontWeight: 800,
           flexShrink: 0, boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
-        }} aria-label="Last Man Standing logo">
-          🪑
+        }} aria-label="EasyPartyKit.ca logo">
+          🎈
         </div>
         <div style={{ minWidth: 0 }}>
           <div style={{
             fontSize: isMobile ? 15 : 19, fontWeight: 800, fontFamily: T.sans,
-            letterSpacing: "0.02em", textTransform: "uppercase", lineHeight: 1.1,
+            letterSpacing: "0.01em", lineHeight: 1.1,
             color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
-            Last Man Standing
+            EasyPartyKit.ca
           </div>
           {!isMobile && (
             <div style={{
               fontSize: 11, color: C.sunshineSoft, fontFamily: T.sans,
               marginTop: 2, fontStyle: "italic", opacity: 0.95,
             }}>
-              Because when the music stops, your chairs better be ready.
+              Party rentals made easy.
             </div>
           )}
         </div>
