@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EasyPartyKit.ca — Party Rentals</title>
+    <style>
+      /* Printing a receipt should produce the document, not the whole app.
+         The overlay already covers the screen; print just strips the chrome. */
+      @media print {
+        @page { margin: 14mm; }
+        body { background: #fff !important; }
+        body * { visibility: hidden !important; }
+        .epk-doc-sheet, .epk-doc-sheet * { visibility: visible !important; }
+        .epk-doc-actions { display: none !important; }
+        .epk-doc-sheet {
+          position: absolute !important; left: 0; top: 0; width: 100%;
+          box-shadow: none !important; border: none !important; padding: 0 !important;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
