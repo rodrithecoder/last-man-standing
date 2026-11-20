@@ -13,7 +13,7 @@ test("Monday–Sunday boundaries remain local and cross months", () => {
 test("weekly snapshot accounts for partial payments and overdue returns", () => {
   const bookings = [
     { id: "1", name: "Alex", startDate: "2026-11-17", endDate: "2026-11-20",
-      serviceType: "delivery", totalCost: 1250.75, status: "active" },
+      serviceType: "delivery", salesRep: "Lucia", totalCost: 1250.75, status: "active" },
     { id: "2", name: "Sam", startDate: "2026-11-22", endDate: "2026-11-23",
       serviceType: "pickup", totalCost: 99.99, status: "active" },
     { id: "3", name: "Old", startDate: "2026-11-11", endDate: "2026-11-15",
@@ -28,6 +28,7 @@ test("weekly snapshot accounts for partial payments and overdue returns", () => 
   assert.equal(result.expectedCollections, 1000.5);
   assert.equal(result.expectedCollectionsLabel, "$1,001");
   assert.equal(result.nextJobs[0].name, "Alex");
+  assert.equal(result.nextJobs[0].salesRep, "Lucia");
   assert.equal(result.nextJobs[0].type, "Return");
   assert.equal(result.nextJobs[1].type, "Pickup");
   assert.equal(result.nextJobs[1].name, "Sam");
