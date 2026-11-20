@@ -75,3 +75,30 @@ test("pickup location appears in pickup and return jobs, not deliveries", () => 
   assert.equal(delivery.pickupLocation, "");
   assert.equal(returned.pickupLocation, "sergio");
 });
+
+test("rental marked out appears as an out return, not a pending pickup", () => {
+  const bookings = [
+    { id: "out", name: "Sergio pickup", startDate: "2026-11-20", endDate: "2026-11-22",
+      serviceType: "pickup", pickupLocation: "sergio", status: "out", totalCost: 200 },
+    { id: "waiting", name: "Next rental", startDate: "2026-11-21", endDate: "2026-11-23",
+      serviceType: "delivery", status: "active", totalCost: 100 },
+  ];
+  const result = buildWeeklyWidgetSnapshot(bookings, [], new Date(2026,10,20,12));
+  const job = result.nextJobs.find((j) => j.name === "Sergio pickup");
+  assert.equal(result.nextJobs.filter((j) => j.name === "Sergio pickup").length, 1);
+  assert.equal(job.type, "Return");
+  assert.equal(job.status, "out");
+  assert.equal(job.pickupLocation, "sergio");
+  assert.equal(job.overdue, false);
+  assert.equal(result.nextJobs.find((j) => j.name === "Next rental").status, "active");
+});
+test("overdue out rental remains visible and flagged", () => {
+  const result = buildWeeklyWidgetSnapshot([
+    { id: "late", name: "Late", startDate: "2026-11-15", endDate: "2026-11-18",
+      status: "out", serviceType: "pickup", totalCost: 100 },
+  ], [], new Date(2026,10,20,12));
+  assert.equal(result.nextJobs[0].status, "out");
+  assert.equal(result.nextJobs[0].overdue, true);
+  assert.equal(result.nextJobs[0].type, "Return");
+  assert.equal(result.counts.overdue, 1);
+});
