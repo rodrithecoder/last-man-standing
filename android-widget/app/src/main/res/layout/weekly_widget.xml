@@ -220,13 +220,13 @@
       android:orientation="vertical" android:layout_marginTop="5dp" android:padding="12dp"
       android:background="@drawable/widget_finance_card">
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="EXPECTED COLLECTIONS THIS WEEK" android:textSize="10sp"
+        android:text="TOTAL REVENUE THIS WEEK" android:textSize="10sp"
         android:textStyle="bold" android:textColor="#446A52"/>
     <TextView android:id="@+id/collections" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="—" android:layout_marginTop="4dp" android:textSize="28sp"
         android:textStyle="bold" android:textColor="#214F39"/>
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="Outstanding balances · projected" android:layout_marginTop="2dp"
+        android:text="Full booking value · Monday–Sunday" android:layout_marginTop="2dp"
         android:textSize="10sp" android:textColor="#587866"/>
   </LinearLayout>
   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
