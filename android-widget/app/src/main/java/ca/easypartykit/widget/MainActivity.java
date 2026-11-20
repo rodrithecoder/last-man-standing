@@ -13,10 +13,40 @@ import android.webkit.WebResourceRequest;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.Toast;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.LinearLayout;
+import android.view.Gravity;
 import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private WebView webView;
+    private TextView syncStatus;
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private void status(String value) {
+        if (syncStatus != null) syncStatus.setText(value);
+    }
+    private void syncNow() {
+        if (webView == null) return;
+        String url = webView.getUrl();
+        if (url == null || !isTrusted(url)) {
+            status("Cannot sync: app is at " + (url == null ? "no page" : android.net.Uri.parse(url).getHost()));
+            return;
+        }
+        status("Checking widget connection…");
+        // Only return state labels to Android; never return customers or amounts
+        // through evaluateJavascript's callback.
+        String js = "(function(){"
+            + "var b=window.EasyPartyWidget;"
+            + "if(!b||typeof b.update!=='function')return 'Bridge unavailable';"
+            + "var s=window.__epkWeeklySnapshot;"
+            + "if(!s)return 'Waiting for booking data';"
+            + "try{b.update(JSON.stringify(s));return 'Snapshot sent: '+s.counts.rentals+' rentals';}"
+            + "catch(e){return 'Sync error: '+String(e.message).slice(0,80);}"
+            + "})()";
+        webView.evaluateJavascript(js, result -> status(result == null ? "No response from page" :
+            result.replace("\\\"", "").replace("\"", "")));
+    }
     private String lastSyncIssue = "Waiting for website data";
     private static final String TRUSTED_HOST = android.net.Uri.parse(BuildConfig.APP_URL).getHost();
 
@@ -24,8 +54,30 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         webView = new WebView(this);
         webView.setBackgroundColor(Color.WHITE);
-        setContentView(webView, new FrameLayout.LayoutParams(
+        FrameLayout root = new FrameLayout(this);
+        root.addView(webView, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.HORIZONTAL);
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        controls.setPadding(16, 4, 12, 4);
+        controls.setBackgroundColor(Color.rgb(229, 240, 229));
+        syncStatus = new TextView(this);
+        syncStatus.setTextColor(Color.rgb(33, 79, 57));
+        syncStatus.setTextSize(11);
+        syncStatus.setText("Widget: waiting for bookings");
+        controls.addView(syncStatus, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button syncButton = new Button(this);
+        syncButton.setText("Sync Widget");
+        syncButton.setAllCaps(false);
+        syncButton.setOnClickListener(v -> syncNow());
+        controls.addView(syncButton);
+        FrameLayout.LayoutParams controlParams = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM);
+        root.addView(controls, controlParams);
+        setContentView(root);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setAllowFileAccess(false);
@@ -40,6 +92,7 @@ public final class MainActivity extends Activity {
                     if (webView == null || webView.getUrl() == null ||
                         !isTrusted(webView.getUrl())) {
                         lastSyncIssue = "Widget sync blocked: unexpected app URL";
+                        status(lastSyncIssue);
                         Toast.makeText(MainActivity.this, lastSyncIssue, Toast.LENGTH_LONG).show();
                         return;
                     }
@@ -53,11 +106,13 @@ public final class MainActivity extends Activity {
                             MainActivity.this, WeeklyWidgetProvider.class));
                         for (int id : ids) WeeklyWidgetProvider.render(MainActivity.this, manager, id);
                         lastSyncIssue = "Widget synced";
+                        status("Widget synced · " + obj.getJSONObject("counts").optInt("rentals") + " rentals");
                         Toast.makeText(MainActivity.this,
                             "Widget synced: " + obj.getJSONObject("counts").optInt("rentals") +
                             " rentals this week", Toast.LENGTH_LONG).show();
                     } catch (Exception e) {
                         lastSyncIssue = "Widget sync failed: invalid snapshot";
+                        status(lastSyncIssue);
                         Toast.makeText(MainActivity.this, lastSyncIssue, Toast.LENGTH_LONG).show();
                     }
                 });
@@ -70,6 +125,7 @@ public final class MainActivity extends Activity {
                     // The page may have loaded before the JS bridge status changed.
                     // A webpage can invoke this after its bookings finish loading.
                     view.evaluateJavascript("window.dispatchEvent(new Event('easy-party-widget-sync'))", null);
+                    handler.postDelayed(() -> syncNow(), 2500);
                 }
             }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
