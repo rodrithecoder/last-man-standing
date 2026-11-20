@@ -455,11 +455,22 @@ function calcTotal(itemsMap, itemDefs, svcType, deliveryFee, discount, discountM
   const disc = discountMode === "amt" ? Math.min(Math.max(d, 0), sub) : sub * (d / 100);
   return { itemsTotal, deliveryFee: fee, discountAmount: disc, totalCost: sub - disc };
 }
+// Whole-dollar formatting is presentation only; money in storage, inputs,
+// exports, and calculations keeps its existing full precision.
+const roundedDollarFormatter = new Intl.NumberFormat("en-CA", {
+  minimumFractionDigits: 0, maximumFractionDigits: 0,
+});
+function formatAmount(value) {
+  const n = Number(value);
+  return roundedDollarFormatter.format(Number.isFinite(n) ? n : 0);
+}
+function formatMoney(value) { return "$" + formatAmount(value); }
+
 // "10%" or "$25.00" — one place, so the form, the table and the receipt agree.
 function discountLabel(b) {
   const d = Number(b && b.discount) || 0;
   if (!d) return "";
-  return (b.discountMode === "amt") ? "$" + d.toFixed(2) : d + "%";
+  return (b.discountMode === "amt") ? formatMoney(d) : d + "%";
 }
 
 // CSV export helper (bookings only — keeps existing behavior)
@@ -1019,7 +1030,7 @@ function SettingsPanel({
                   <tr key={it.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: "6px 6px", fontFamily: T.sans, fontSize: 12, color: C.text }}>{it.name}</td>
                     <td style={{ padding: "6px 6px", fontFamily: T.sans, fontSize: 11, color: it.category ? C.textSub : C.textMuted }}>{itemCategory(it)}</td>
-                    <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, color: C.textSub }}>${it.price}</td>
+                    <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, color: C.textSub }}>${formatAmount(it.price)}</td>
                     <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, color: C.textSub }}>{it.inventory}</td>
                     <td style={{ padding: "6px 6px", whiteSpace: "nowrap" }}>
                       <Btn small onClick={() => startEditItem(it)} variant="ghost">Edit</Btn>{" "}
@@ -1283,7 +1294,7 @@ function BookingForm({
               return (
                 <tr key={it.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                   <td style={{ padding: "6px 6px", fontSize: 12, fontFamily: T.sans, color: C.text }}>{it.name}</td>
-                  <td style={{ padding: "6px 6px", fontSize: 12, fontFamily: T.mono, color: C.textSub }}>${it.price}</td>
+                  <td style={{ padding: "6px 6px", fontSize: 12, fontFamily: T.mono, color: C.textSub }}>${formatAmount(it.price)}</td>
                   <td style={{ padding: "4px 6px" }}>
                     <input type="number" min={0} max={it.inventory}
                       style={{ ...inp(false), fontSize: 12, width: 60, padding: "5px 6px", borderColor: err ? C.danger : C.border }}
@@ -1370,25 +1381,25 @@ function BookingForm({
             return (
               <div key={it.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, color: C.textSub, marginBottom: 4 }}>
                 <span>{it.name} × {qty}</span>
-                <span style={{ fontFamily: T.mono }}>${(qty * it.price).toFixed(2)}</span>
+                <span style={{ fontFamily: T.mono }}>${(qty * it.price).toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
               </div>
             );
           })}
           {form.serviceType === "delivery" && preview.deliveryFee > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, color: C.textSub, marginBottom: 4 }}>
               <span>Delivery</span>
-              <span style={{ fontFamily: T.mono }}>${preview.deliveryFee.toFixed(2)}</span>
+              <span style={{ fontFamily: T.mono }}>${preview.deliveryFee.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
             </div>
           )}
           {preview.discountAmount > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, color: C.danger, marginBottom: 4 }}>
               <span>Discount ({form.discountMode === "amt" ? `$${form.discount}` : `${form.discount}%`})</span>
-              <span style={{ fontFamily: T.mono }}>-${preview.discountAmount.toFixed(2)}</span>
+              <span style={{ fontFamily: T.mono }}>-${preview.discountAmount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
             </div>
           )}
           <div style={{ borderTop: `1px solid ${C.borderStrong}`, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 700, fontFamily: T.sans, fontSize: 14 }}>
             <span>Total</span>
-            <span style={{ fontFamily: T.mono }}>${preview.totalCost.toFixed(2)}</span>
+            <span style={{ fontFamily: T.mono }}>${preview.totalCost.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
           </div>
         </div>
       )}
@@ -1615,7 +1626,7 @@ function InvoiceDoc({ booking, business, itemDefs, categories, payments, mode, o
     itemDefs.filter((it) => booking.items && booking.items[it.id]), categories
   );
 
-  const money = (n) => "$" + (Number(n) || 0).toFixed(2);
+  const money = formatMoney;
   const lbl = { fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: C.textMuted, fontFamily: T.sans, fontWeight: 600 };
   const val = { fontSize: 12, color: C.text, fontFamily: T.sans };
   const row = { display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, padding: "3px 0" };
@@ -1771,7 +1782,7 @@ function saveInvoiceAsPng(booking, business, itemDefs, categories, payments, mod
   const items = groupByCategory(
     itemDefs.filter((it) => booking.items && booking.items[it.id]), categories
   );
-  const money = (value) => "$" + (Number(value) || 0).toFixed(2);
+  const money = formatMoney;
   const W = 650, S = 2, pad = 32, right = W - pad;
   const canvas = document.createElement("canvas");
   canvas.width = W * S;
@@ -1979,7 +1990,7 @@ function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onC
           <span style={{ fontSize: 11, fontFamily: T.sans, color: mode === "receipt" && t.due > 0 ? C.warning : C.textMuted }}>
             {mode === "receipt"
               ? (t.due > 0
-                  ? `Not paid in full — this receipt shows ${"$" + t.paid.toFixed(2)} received and notes the balance.`
+                  ? `Not paid in full — this receipt shows ${"$" + formatAmount(t.paid)} received and notes the balance.`
                   : "Shows what was collected.")
               : "Shows what is still owed."}
           </span>
@@ -2191,7 +2202,7 @@ function BookingsList({
                     <span style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, background: C.bg, border: `1px solid ${C.border}`, padding: "2px 8px", borderRadius: 2 }}>
                       {b.serviceType === "delivery" ? "Delivery" : "Pickup"}
                     </span>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
                   </div>
                   <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                     <Btn variant="default" onClick={() => requestInvoice(b)} style={{ whiteSpace: "nowrap", minHeight: 44, padding: "10px 16px" }}>
@@ -2238,7 +2249,7 @@ function BookingsList({
               </div>
             ))}
             <div style={{ marginLeft: "auto" }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${totalRev.toFixed(2)}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${totalRev.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</div>
               <div style={{ fontSize: 10, color: C.textMuted, fontFamily: T.sans, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 {filtersActive ? "Filtered Revenue" : "Total Revenue"}
               </div>
@@ -2446,8 +2457,8 @@ function SettlementDialog({
   const Row = ({ label, chetos, rodri, isNet }) => (
     <div style={{ display: "flex", fontSize: 12, padding: "6px 0", borderTop: isNet ? `1px solid ${C.borderStrong}` : "none", marginTop: isNet ? 6 : 0 }}>
       <span style={{ flex: 1, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>{label}</span>
-      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${chetos.toFixed(2)}</span>
-      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${rodri.toFixed(2)}</span>
+      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${chetos.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
+      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${rodri.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
     </div>
   );
 
@@ -2479,7 +2490,7 @@ function SettlementDialog({
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ fontSize: 12, color: C.textSub, marginBottom: 4 }}>{whoPays}</div>
           <div style={{ fontSize: 26, fontFamily: T.mono, fontWeight: 800, color: C.accentDeep }}>
-            ${owesAmount.toFixed(2)}
+            ${owesAmount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
           </div>
         </div>
 
@@ -2728,12 +2739,12 @@ function AccountsView({
             General Account
           </div>
           <div style={{ fontSize: isMobile ? 28 : 36, fontWeight: 800, fontFamily: T.mono, lineHeight: 1.1 }}>
-            ${generalBalance.toFixed(2)}
+            ${generalBalance.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 8, fontFamily: T.sans, lineHeight: 1.6 }}>
-            Starting: <span style={{ fontFamily: T.mono }}>${(settings.startingGeneral || 0).toFixed(2)}</span>
+            Starting: <span style={{ fontFamily: T.mono }}>${(settings.startingGeneral || 0).toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
             <span style={{ margin: "0 8px" }}>·</span>
-            Collected: <span style={{ fontFamily: T.mono }}>${totalCollected.toFixed(2)}</span>
+            Collected: <span style={{ fontFamily: T.mono }}>${totalCollected.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
           </div>
         </div>
 
@@ -2756,7 +2767,7 @@ function AccountsView({
             </div>
           ) : (
             <div style={{ fontSize: isMobile ? 22 : 26, fontWeight: 700, fontFamily: T.mono, color: C.text, marginBottom: 12 }}>
-              ${investment.toFixed(2)}
+              ${investment.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
             </div>
           )}
 
@@ -2797,7 +2808,7 @@ function AccountsView({
 
             {hasProjection && (
               <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8, fontFamily: T.sans, lineHeight: 1.4 }}>
-                Projected adds <span style={{ fontFamily: T.mono, color: C.text, fontWeight: 600 }}>${projectedRevenue.toFixed(2)}</span> from active bookings.
+                Projected adds <span style={{ fontFamily: T.mono, color: C.text, fontWeight: 600 }}>${projectedRevenue.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span> from active bookings.
               </div>
             )}
           </div>
@@ -2819,15 +2830,15 @@ function AccountsView({
               {p.name}
             </div>
             <div style={{ fontSize: isMobile ? 24 : 30, fontWeight: 800, fontFamily: T.mono, color: p.net >= 0 ? C.text : C.danger, lineHeight: 1.1 }}>
-              {p.net < 0 ? "−" : ""}${Math.abs(p.net).toFixed(2)}
+              {p.net < 0 ? "−" : ""}${Math.abs(p.net).toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
             </div>
             <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 11, color: C.textSub, fontFamily: T.sans }}>
-              <span>Collected: <span style={{ fontFamily: T.mono, color: C.text }}>${p.collected.toFixed(2)}</span></span>
-              <span>Expenses: <span style={{ fontFamily: T.mono, color: C.danger }}>−${p.expensesAmt.toFixed(2)}</span></span>
+              <span>Collected: <span style={{ fontFamily: T.mono, color: C.text }}>${p.collected.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span></span>
+              <span>Expenses: <span style={{ fontFamily: T.mono, color: C.danger }}>−${p.expensesAmt.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span></span>
             </div>
             {p.starting !== 0 && (
               <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4, fontFamily: T.sans }}>
-                Starting: <span style={{ fontFamily: T.mono }}>${p.starting.toFixed(2)}</span>
+                Starting: <span style={{ fontFamily: T.mono }}>${p.starting.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
               </div>
             )}
           </div>
@@ -2850,7 +2861,7 @@ function AccountsView({
             Expenses (since last settle)
           </div>
           <div style={{ fontSize: 12, color: C.textSub, fontFamily: T.mono }}>
-            {expenses.length} item{expenses.length !== 1 ? "s" : ""} · ${totalExpenses.toFixed(2)}
+            {expenses.length} item{expenses.length !== 1 ? "s" : ""} · ${totalExpenses.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
           </div>
         </div>
         {expenses.length === 0 ? (
@@ -2879,7 +2890,7 @@ function AccountsView({
                       <span style={{ fontSize: 9, fontWeight: 700, color: C.accentDeep, background: C.sunshine, padding: "2px 6px", borderRadius: 2, letterSpacing: "0.06em" }}>INV</span>
                     )}
                   </td>
-                  <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.danger, fontWeight: 600 }}>−${e.amount.toFixed(2)}</td>
+                  <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.danger, fontWeight: 600 }}>−${e.amount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</td>
                   <td style={{ padding: "4px 8px", whiteSpace: "nowrap", textAlign: "right" }}>
                     <Btn small variant="ghost" onClick={() => onDeleteExpense(e)} style={{ color: C.danger }}>Remove</Btn>
                   </td>
@@ -2916,13 +2927,13 @@ function AccountsView({
                       {new Date(s.settledAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </td>
                     <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.textSub, whiteSpace: "nowrap" }}>
-                      ${s.chetosAmount.toFixed(2)} / <span style={{ color: C.danger }}>${s.chetosExpenses.toFixed(2)}</span>
+                      ${s.chetosAmount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })} / <span style={{ color: C.danger }}>${s.chetosExpenses.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
                     </td>
                     <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.textSub, whiteSpace: "nowrap" }}>
-                      ${s.rodriAmount.toFixed(2)} / <span style={{ color: C.danger }}>${s.rodriExpenses.toFixed(2)}</span>
+                      ${s.rodriAmount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })} / <span style={{ color: C.danger }}>${s.rodriExpenses.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
                     </td>
                     <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.accent, fontWeight: 700, whiteSpace: "nowrap" }}>
-                      ${(Math.abs(s.difference) / 2).toFixed(2)}
+                      ${(Math.abs(s.difference) / 2).toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
                     </td>
                   </tr>
                 ))}
@@ -3013,7 +3024,7 @@ function Header({ isMobile, bookings, totalRevenue }) {
       <div style={{ display: "flex", gap: isMobile ? 14 : 24, alignItems: "center", flexShrink: 0 }}>
         {[
           { l: "Bookings", v: bookings.length },
-          { l: "Revenue", v: `$${totalRevenue.toFixed(2)}` },
+          { l: "Revenue", v: `$${totalRevenue.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}` },
         ].map((s) => (
           <div key={s.l} style={{ textAlign: "right" }}>
             <div style={{ fontSize: isMobile ? 14 : 17, fontWeight: 800, color: C.sunshine, fontFamily: T.mono }}>{s.v}</div>
@@ -3377,7 +3388,7 @@ export default function App() {
       else if (f.discountMode === "amt") {
         const sub = itemDefs.reduce((s, it) => s + (parseInt(f.items[it.id]) || 0) * it.price, 0)
           + (f.serviceType === "delivery" ? parseFloat(f.deliveryFee) || 0 : 0);
-        if (d > sub) e.discount = `Can't discount more than the $${sub.toFixed(2)} subtotal.`;
+        if (d > sub) e.discount = `Can't discount more than the $${sub.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })} subtotal.`;
       } else if (d > 100) e.discount = "A percentage can't be over 100.";
     }
     return e;
