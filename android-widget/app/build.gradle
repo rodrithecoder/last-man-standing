@@ -6,8 +6,8 @@ android {
         applicationId 'ca.easypartykit.widget'
         minSdk 26
         targetSdk 35
-        versionCode 5
-        versionName '0.2.0'
+        versionCode 6
+        versionName '0.2.1'
         // This URL must point to a deployment containing the snapshot bridge.
         buildConfigField 'String', 'APP_URL', '"https://last-man-standing-hazel.vercel.app/"'
     }
