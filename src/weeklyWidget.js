@@ -29,12 +29,12 @@ export function buildWeeklyWidgetSnapshot(bookings = [], payments = [], now = ne
   for (const b of active) {
     if (b.startDate >= today) futureJobs.push({
       id: b.id, date: b.startDate, time: b.etaOut || "",
-      name: b.name || "Rental", type: b.serviceType === "delivery" ? "Delivery" : "Pickup",
+      name: b.name || "Rental", salesRep: b.salesRep || "", type: b.serviceType === "delivery" ? "Delivery" : "Pickup",
       order: 0,
     });
     if (b.endDate >= today) futureJobs.push({
       id: b.id, date: b.endDate, time: b.etaBack || "",
-      name: b.name || "Rental", type: "Return", order: 1,
+      name: b.name || "Rental", salesRep: b.salesRep || "", type: "Return", order: 1,
     });
   }
   futureJobs.sort((a, b) =>
