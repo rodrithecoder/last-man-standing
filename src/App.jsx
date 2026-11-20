@@ -76,6 +76,14 @@ function groupByCategory(itemDefs, cats) {
   });
 }
 
+// Internal pickup reference; deliberately excluded from customer SMS.
+const PICKUP_LOCATIONS = Object.freeze({
+  sergio: { label: "Sergio", address: "7938 209 Street, Langley, BC" },
+  rodri: { label: "Rodri", address: "20860 76 Ave, Langley, BC" },
+});
+const SALES_REPS = ["Rodri", "Sergio"];
+function pickupLocationInfo(value) { return PICKUP_LOCATIONS[value] || null; }
+
 const DEFAULT_MESSAGE_TEMPLATES = {
   confirm: "Hi {name}! You're booked with EasyPartyKit.ca. {items} for {date} ({service}). Total ${total}. We'll text a reminder 2 days before. Reply here with any questions — thank you!",
   remind: "Hi {name}! Reminder from EasyPartyKit.ca: your booking is coming up {date} — {items}. Reply YES to confirm, or let us know if anything changed. Thank you!",
@@ -131,6 +139,7 @@ function bookingToDB(b) {
     days: b.days,
     items: b.items || {},
     service_type: b.serviceType,
+    pickup_location: b.serviceType === "pickup" ? (b.pickupLocation || null) : null,
     address: b.address || "",
     notes: b.notes || "",
     phone: b.phone || "",
@@ -160,6 +169,7 @@ function bookingFromDB(r) {
     days: r.days,
     items: r.items || {},
     serviceType: r.service_type,
+    pickupLocation: r.pickup_location || "",
     address: r.address || "",
     notes: r.notes || "",
     phone: r.phone || "",
@@ -479,7 +489,7 @@ function bookingsToCSV(bookings, itemDefs) {
   const headers = [
     "Customer", "Sales Rep", "Start", "End", "Days",
     ...itemDefs.map((i) => i.name),
-    "Service", "Address", "Subtotal", "Delivery Fee",
+    "Service", "Address", "Pickup Location", "Subtotal", "Delivery Fee",
     "Discount", "Discount $", "Total", "Notes", "Phone", "Email",
   ];
   const escape = (v) => {
@@ -490,7 +500,7 @@ function bookingsToCSV(bookings, itemDefs) {
     [
       b.name, b.salesRep, b.startDate, b.endDate, b.days,
       ...itemDefs.map((i) => b.items?.[i.id] || 0),
-      b.serviceType, b.address || "",
+      b.serviceType, b.address || "", pickupLocationInfo(b.pickupLocation)?.label || "",
       (b.itemsTotal || 0).toFixed(2),
       (b.deliveryFee || 0).toFixed(2),
       discountLabel(b),
@@ -559,13 +569,13 @@ function buildBackupCSV({ bookings, vacations, payments, settlements, expenses, 
     [
       "ID", "Customer", "Sales Rep", "Start", "End", "Days",
       ...itemDefs.map((i) => i.name),
-      "Service", "Address", "Subtotal", "Delivery Fee",
+      "Service", "Address", "Pickup Location", "Subtotal", "Delivery Fee",
       "Discount", "Discount $", "Total", "Status", "Notes", "Phone", "Email", "Confirmed",
     ],
     bookings.map((b) => [
       b.id, b.name, b.salesRep, b.startDate, b.endDate, b.days,
       ...itemDefs.map((i) => b.items?.[i.id] || 0),
-      b.serviceType, b.address || "",
+      b.serviceType, b.address || "", pickupLocationInfo(b.pickupLocation)?.label || "",
       (b.itemsTotal || 0).toFixed(2),
       (b.deliveryFee || 0).toFixed(2),
       discountLabel(b),
@@ -1215,8 +1225,14 @@ function BookingForm({
           onChange={(e) => setForm({ name: e.target.value })} />
       </Field>
       <Field label="Sales Rep" error={formErrors.salesRep}>
-        <input style={inputStyle} placeholder="Representative name" value={form.salesRep}
-          onChange={(e) => setForm({ salesRep: e.target.value })} />
+        <select style={inputStyle} value={form.salesRep}
+          onChange={(e) => setForm({ salesRep: e.target.value })}>
+          <option value="">Select sales rep</option>
+          {SALES_REPS.map((name) => <option key={name} value={name}>{name}</option>)}
+          {form.salesRep && !SALES_REPS.includes(form.salesRep) && (
+            <option value={form.salesRep}>{form.salesRep} (existing)</option>
+          )}
+        </select>
       </Field>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -1319,13 +1335,38 @@ function BookingForm({
         <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 3, overflow: "hidden" }}>
           {["pickup", "delivery"].map((t) => (
             <button key={t} type="button"
-              onClick={() => setForm({ serviceType: t, deliveryFee: "", address: "" })}
+              onClick={() => setForm({
+                serviceType: t, deliveryFee: "", address: "",
+                pickupLocation: t === "pickup" ? form.pickupLocation : "",
+              })}
               style={{ flex: 1, padding: isMobile ? "10px" : "7px", border: "none", cursor: "pointer", fontFamily: T.sans, fontSize: 12, fontWeight: 600, background: form.serviceType === t ? C.accent : C.surface, color: form.serviceType === t ? "#fff" : C.textSub, transition: "all 0.15s" }}>
               {t === "pickup" ? "Pickup" : "Delivery"}
             </button>
           ))}
         </div>
       </Field>
+
+      {form.serviceType === "pickup" && (
+        <Field label="Pickup Location" error={formErrors.pickupLocation}
+          hint="Internal reference only — not included in customer messages.">
+          <select style={inputStyle} value={form.pickupLocation || ""}
+            onChange={(e) => setForm({ pickupLocation: e.target.value })}>
+            <option value="">Select pickup location</option>
+            {Object.entries(PICKUP_LOCATIONS).map(([code, info]) => (
+              <option key={code} value={code}>{info.label}</option>
+            ))}
+          </select>
+          {pickupLocationInfo(form.pickupLocation) && (
+            <div style={{ marginTop: 8, background: C.accentSoft, padding: "10px 12px",
+              borderRadius: 8, fontSize: 12, color: C.accentDeep, fontFamily: T.sans }}>
+              <div style={{ fontWeight: 700, marginBottom: 3 }}>
+                {pickupLocationInfo(form.pickupLocation).label}'s pickup location
+              </div>
+              <AddressLink address={pickupLocationInfo(form.pickupLocation).address} size={12}/>
+            </div>
+          )}
+        </Field>
+      )}
 
       {form.serviceType === "delivery" && (
         <>
@@ -2176,6 +2217,13 @@ function BookingsList({
                         {b.salesRep} · {fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}
                       </div>
                       <EtaLine booking={b} size={11} />
+                      {b.serviceType === "pickup" && pickupLocationInfo(b.pickupLocation) && (
+                        <div style={{ marginTop: 4, padding: "5px 8px", borderRadius: 6,
+                          background: C.accentSoft, fontSize: 11, fontFamily: T.sans, color: C.accentDeep }}>
+                          <strong>Pickup at {pickupLocationInfo(b.pickupLocation).label}:</strong>{" "}
+                          <AddressLink address={pickupLocationInfo(b.pickupLocation).address} size={11} />
+                        </div>
+                      )}
                       {b.address && (
                         <div style={{ marginTop: 4 }}>
                           <AddressLink address={b.address} size={12} />
@@ -3366,7 +3414,7 @@ export default function App() {
 
   const EMPTY_FORM = {
     name: "", salesRep: "", startDate: "", endDate: "",
-    items: {}, serviceType: "pickup", deliveryFee: "", address: "",
+    items: {}, serviceType: "pickup", pickupLocation: "", deliveryFee: "", address: "",
     discount: "", discountMode: "pct", notes: "", phone: "", email: "",
     etaOut: "", etaBack: "",
   };
@@ -3424,6 +3472,9 @@ export default function App() {
     const f = form;
     if (!f.name.trim()) e.name = "Required";
     if (!f.salesRep.trim()) e.salesRep = "Required";
+    if (f.serviceType === "pickup" && !f.pickupLocation) e.pickupLocation = "Choose a pickup location";
+    if (f.serviceType === "pickup" && f.pickupLocation && !pickupLocationInfo(f.pickupLocation))
+      e.pickupLocation = "Invalid pickup location";
     if (!f.startDate) e.startDate = "Required";
     if (!f.endDate) e.endDate = "Required";
     if (f.startDate && f.endDate && f.startDate > f.endDate) e.endDate = "End must be after start";
@@ -3467,6 +3518,7 @@ export default function App() {
       days: daysBetween(form.startDate, form.endDate),
       items: itemsMap,
       serviceType: form.serviceType,
+      pickupLocation: form.serviceType === "pickup" ? form.pickupLocation : "",
       address: form.serviceType === "delivery" ? form.address.trim() : "",
       notes: form.notes.trim(),
       phone: form.phone.trim(),
@@ -3509,6 +3561,7 @@ export default function App() {
       endDate: b.endDate,
       items: itemsForm,
       serviceType: b.serviceType,
+      pickupLocation: b.pickupLocation || "",
       deliveryFee: b.deliveryFee ? String(b.deliveryFee) : "",
       address: b.address || "",
       discount: b.discount ? String(b.discount) : "",
