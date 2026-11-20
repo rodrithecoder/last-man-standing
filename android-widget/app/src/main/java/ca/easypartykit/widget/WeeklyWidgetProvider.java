@@ -83,7 +83,7 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
                         StringBuilder itemLabel = new StringBuilder();
                         if (rentalItems != null) {
                             for (int itemIndex = 0; itemIndex < Math.min(2, nItems); itemIndex++) {
-                                if (itemIndex > 0) itemLabel.append("\\n");
+                                if (itemIndex > 0) itemLabel.append((char) 10);
                                 itemLabel.append(rentalItems.optString(itemIndex, ""));
                             }
                         }
