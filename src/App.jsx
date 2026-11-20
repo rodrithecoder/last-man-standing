@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { buildWeeklyWidgetSnapshot } from "./weeklyWidget.js";
 
 // ─── Supabase Client ──────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -3315,6 +3316,39 @@ export default function App() {
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  // Android bridge: expose a retriable sync, not just a one-off effect.
+  // This handles Android WebView startup timing and a refresh request from native.
+  useEffect(() => {
+    if (loading || loadError) return;
+    const syncWidget = () => {
+      const snapshot = buildWeeklyWidgetSnapshot(bookings, payments);
+      // Debug build can request this on demand after Supabase has loaded.
+      window.__epkWeeklySnapshot = snapshot;
+      if (typeof window.EasyPartyWidget?.update !== "function") return;
+      try {
+        window.EasyPartyWidget.update(JSON.stringify(snapshot));
+      } catch (err) {
+        console.warn("Android widget sync failed", err);
+      }
+    };
+    syncWidget();
+    window.addEventListener("easy-party-widget-sync", syncWidget);
+    const retry = window.setTimeout(syncWidget, 1200);
+    return () => {
+      window.removeEventListener("easy-party-widget-sync", syncWidget);
+      window.clearTimeout(retry);
+    };
+  }, [bookings, payments, loading, loadError]);
+
+  useEffect(() => {
+    const action = new URLSearchParams(window.location.search).get("widget");
+    if (action !== "new") return;
+    // Set after mount to open the same booking form when invoked from the widget.
+    if (window.innerWidth < 640) setMobileTab("form");
+    else setDesktopFormOpen(true);
+    window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
   const [mobileTab, setMobileTab] = useState("calendar");
