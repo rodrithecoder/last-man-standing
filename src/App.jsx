@@ -3318,12 +3318,25 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  // Android companion app exposes this bridge only in its trusted WebView.
-  // Browser users are unaffected. Widget refreshes when the app loads or data changes.
+  // Android bridge: expose a retriable sync, not just a one-off effect.
+  // This handles Android WebView startup timing and a refresh request from native.
   useEffect(() => {
-    if (loading || loadError || !window.EasyPartyWidget?.update) return;
-    const snapshot = buildWeeklyWidgetSnapshot(bookings, payments);
-    window.EasyPartyWidget.update(JSON.stringify(snapshot));
+    if (loading || loadError) return;
+    const syncWidget = () => {
+      if (typeof window.EasyPartyWidget?.update !== "function") return;
+      try {
+        window.EasyPartyWidget.update(JSON.stringify(buildWeeklyWidgetSnapshot(bookings, payments)));
+      } catch (err) {
+        console.warn("Android widget sync failed", err);
+      }
+    };
+    syncWidget();
+    window.addEventListener("easy-party-widget-sync", syncWidget);
+    const retry = window.setTimeout(syncWidget, 1200);
+    return () => {
+      window.removeEventListener("easy-party-widget-sync", syncWidget);
+      window.clearTimeout(retry);
+    };
   }, [bookings, payments, loading, loadError]);
 
   useEffect(() => {
