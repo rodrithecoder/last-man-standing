@@ -2935,30 +2935,42 @@ function AccountsView({
         )}
       </div>
 
-      {/* NEW: Vacations panel */}
-      <div style={{ marginTop: 18 }}>
-        <VacationsPanel
-          isMobile={isMobile}
-          vacations={vacations}
-          onAdd={onAddVacation}
-          onDelete={onDeleteVacation}
-        />
-      </div>
 
-      {/* NEW: Backup panel */}
-      <div style={{ marginTop: 4 }}>
-        <BackupPanel isMobile={isMobile} onBackup={onBackup} lastBackupAt={lastBackupAt} />
-      </div>
-
-      {/* Settings */}
-      <div style={{ marginTop: 18 }}>
-        <SettingsPanel {...settingsPanelProps} />
-      </div>
     </div>
   );
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
+function SettingsView({ isMobile, settingsPanelProps, vacations, onAddVacation, onDeleteVacation, onBackup, lastBackupAt }) {
+  return <div style={{ padding: isMobile ? 14 : 24, maxWidth: 800, margin: "0 auto" }}>
+    <div style={{ fontWeight: 800, fontSize: 19, fontFamily: T.sans, marginBottom: 14 }}>Settings</div>
+    <SettingsPanel {...settingsPanelProps} />
+    <VacationsPanel isMobile={isMobile} vacations={vacations} onAdd={onAddVacation} onDelete={onDeleteVacation} />
+    <BackupPanel isMobile={isMobile} onBackup={onBackup} lastBackupAt={lastBackupAt} />
+  </div>;
+}
+function SideNavigation({ active, onSelect, pendingReminders }) {
+  const tabs = [
+    ["calendar", "Calendar", "▦"], ["list", "Bookings", "≡"],
+    ["reminders", "Messages", "✉"], ["accounts", "Accounts", "$"], ["settings", "Settings", "⚙"],
+  ];
+  return <nav aria-label="Main navigation" style={{ width: 82, flexShrink: 0,
+    borderLeft: `1px solid ${C.border}`, background: C.surface, padding: "10px 5px",
+    display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, overflowY: "auto" }}>
+    {tabs.map(([id, label, icon]) => <button key={id} onClick={() => onSelect(id)}
+      type="button" aria-current={active === id ? "page" : undefined}
+      style={{ minHeight: 66, cursor: "pointer", borderRadius: 9,
+        background: active === id ? C.accentSoft : "transparent",
+        border: `1px solid ${active === id ? C.accent : "transparent"}`,
+        color: active === id ? C.accentDeep : C.textSub, fontFamily: T.sans,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+      <span aria-hidden="true" style={{ fontSize: 21 }}>{icon}</span>
+      <span style={{ fontSize: 10, fontWeight: active === id ? 700 : 500 }}>{label}</span>
+      {id === "reminders" && pendingReminders > 0 && <span style={{ fontSize: 9 }}>{pendingReminders}</span>}
+    </button>)}
+  </nav>;
+}
+
 function Header({ isMobile, bookings, totalRevenue }) {
   return (
     <div style={{
@@ -3272,6 +3284,7 @@ export default function App() {
 
   const [mobileTab, setMobileTab] = useState("calendar");
   const [desktopTab, setDesktopTab] = useState("calendar");
+  const [desktopFormOpen, setDesktopFormOpen] = useState(false);
   const [calMonth, setCalMonth] = useState(0);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -3414,6 +3427,7 @@ export default function App() {
     setEditingBookingId(null);
     setTimeout(() => setSuccessMsg(""), 3000);
     if (isMobile) setMobileTab("list");
+    else { setDesktopFormOpen(false); setDesktopTab("calendar"); }
   }
 
   function startEditBooking(b) {
@@ -3439,12 +3453,14 @@ export default function App() {
     setFormErrors({});
     setEditingBookingId(b.id);
     if (isMobile) setMobileTab("form");
+    else setDesktopFormOpen(true);
   }
 
   function cancelEdit() {
     setFormRaw(EMPTY_FORM);
     setFormErrors({});
     setEditingBookingId(null);
+    setDesktopFormOpen(false);
   }
 
   function requestRemoveBooking(b) {
@@ -3670,6 +3686,21 @@ export default function App() {
     return C.cap100;
   }
 
+  function navigateToSettings() {
+    if (!settingsOpen || !settingsDraft) {
+      setSettingsDraft({ ...settings, items: settings.items.map(i => ({ ...i })),
+        categories: [...settingsCategories(settings)] });
+      setSettingsOpen(true);
+    }
+    if (isMobile) setMobileTab("settings");
+    else setDesktopTab("settings");
+  }
+  function toggleDesktopForm() {
+    if (desktopFormOpen) { if (editingBookingId) cancelEdit(); else setDesktopFormOpen(false); return; }
+    if (editingBookingId) cancelEdit();
+    setDesktopFormOpen(true);
+  }
+
   const settingsPanelProps = {
     isMobile, settings, settingsOpen, setSettingsOpen,
     settingsDraft, setSettingsDraft, settingsErr, setSettingsErr,
@@ -3706,6 +3737,9 @@ export default function App() {
     requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, requestInvoice, paidIds,
   };
 
+  const settingsViewProps = { isMobile, settingsPanelProps, vacations,
+    onAddVacation: addVacation, onDeleteVacation: requestDeleteVacation,
+    onBackup: runFullBackup, lastBackupAt };
   const accountsProps = {
     isMobile, settings, payments, settlements, expenses,
     generalBalance, totalCollected, totalExpenses,
@@ -3773,13 +3807,15 @@ export default function App() {
         {mobileTab === "list" && <BookingsList {...listProps} />}
         {mobileTab === "reminders" && <RemindersView {...remindersProps} />}
         {mobileTab === "accounts" && <AccountsView {...accountsProps} />}
+        {mobileTab === "settings" && <SettingsView {...settingsViewProps} />}
         {mobileTab === "form" && <BookingForm {...bookingFormProps} />}
-        <TabBar bottom active={mobileTab} onChange={setMobileTab}
+        <TabBar bottom active={mobileTab} onChange={(tab) => tab === "settings" ? navigateToSettings() : setMobileTab(tab)}
           tabs={[
             { id: "calendar", label: "Cal", icon: "▦" },
             { id: "list", label: "Bookings", icon: "≡" },
             { id: "reminders", label: pendingReminders ? "Msgs " + pendingReminders : "Msgs", icon: "💬" },
             { id: "accounts", label: "$", icon: "$" },
+            { id: "settings", label: "Settings", icon: "⚙" },
             { id: "form", label: editingBookingId ? "Edit" : "New", icon: editingBookingId ? "✎" : "+" },
           ]} />
         <ConfirmDialog
@@ -3834,25 +3870,44 @@ export default function App() {
           onDismiss={() => setBackupBannerDismissed(true)}
         />
       )}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <div style={{ width: 340, minWidth: 300, background: C.bg, borderRight: `1px solid ${C.border}`, overflowY: "auto" }}>
-          <BookingForm {...bookingFormProps} />
+      <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
+        <div style={{ flex: "0 0 68px", background: C.bg, borderRight: `1px solid ${C.border}`,
+          display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button type="button" aria-expanded={desktopFormOpen}
+            aria-label={desktopFormOpen ? "Close booking form" : "New booking"} onClick={toggleDesktopForm}
+            style={{ width: 54, height: 54, borderRadius: "50%", border: `2px solid ${C.accentDeep}`,
+              background: C.accent, color: "#fff", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 3px 10px rgba(0,0,0,.18)", fontFamily: T.sans }}>
+            <span style={{ fontSize: 24, lineHeight: 1 }}>{desktopFormOpen ? "×" : "+"}</span>
+            <span style={{ fontSize: 9, fontWeight: 700 }}>{desktopFormOpen ? "Close" : "New"}</span>
+          </button>
         </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: C.surface }}>
-          <TabBar active={desktopTab} onChange={setDesktopTab}
-            tabs={[
-              { id: "calendar", label: "Calendar" },
-              { id: "list", label: "Bookings" },
-              { id: "reminders", label: pendingReminders ? "Messages (" + pendingReminders + ")" : "Messages" },
-              { id: "accounts", label: "Accounts" },
-            ]} />
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {desktopTab === "calendar" && <CalendarView {...calendarProps} />}
-            {desktopTab === "list" && <BookingsList {...listProps} />}
-            {desktopTab === "reminders" && <RemindersView {...remindersProps} />}
-            {desktopTab === "accounts" && <AccountsView {...accountsProps} />}
+        <main style={{ flex: 1, minWidth: 0, overflowY: "auto", background: C.surface }}>
+          {desktopTab === "calendar" && <CalendarView {...calendarProps} />}
+          {desktopTab === "list" && <BookingsList {...listProps} />}
+          {desktopTab === "reminders" && <RemindersView {...remindersProps} />}
+          {desktopTab === "accounts" && <AccountsView {...accountsProps} />}
+          {desktopTab === "settings" && <SettingsView {...settingsViewProps} />}
+        </main>
+        <SideNavigation active={desktopTab} pendingReminders={pendingReminders}
+          onSelect={(tab) => tab === "settings" ? navigateToSettings() : setDesktopTab(tab)} />
+        {desktopFormOpen && <aside aria-label={editingBookingId ? "Edit booking" : "New booking"}
+          style={{ position: "absolute", zIndex: 10, top: 0, bottom: 0, left: 68,
+            width: "min(400px, calc(100% - 156px))", background: C.surface,
+            borderRight: `1px solid ${C.borderStrong}`, boxShadow: "5px 0 20px rgba(0,0,0,.15)",
+            overflowY: "auto" }}>
+          <div style={{ position: "sticky", top: 0, zIndex: 1, background: C.accentSoft,
+            padding: "8px 12px", borderBottom: `1px solid ${C.border}`, display: "flex",
+            alignItems: "center", justifyContent: "space-between" }}>
+            <strong style={{ fontFamily: T.sans, fontSize: 12 }}>{editingBookingId ? "Edit Booking" : "New Booking"}</strong>
+            <button type="button" aria-label="Close booking form" onClick={() =>
+              editingBookingId ? cancelEdit() : setDesktopFormOpen(false)}
+              style={{ minWidth: 44, minHeight: 44, background: "transparent",
+                border: 0, cursor: "pointer", fontSize: 24, color: C.textSub }}>×</button>
           </div>
-        </div>
+          <BookingForm {...bookingFormProps} />
+        </aside>}
       </div>
       <ConfirmDialog
         open={!!confirmState}
