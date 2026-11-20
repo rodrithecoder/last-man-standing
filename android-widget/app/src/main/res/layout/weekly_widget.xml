@@ -53,6 +53,12 @@
   <LinearLayout android:id="@+id/job_card_1" android:layout_width="match_parent" android:layout_height="89dp"
       android:layout_marginBottom="6dp" android:orientation="horizontal" android:gravity="center_vertical"
       android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_job_card">
+    <View android:id="@+id/job_out_stripe_1" android:layout_width="4dp"
+        android:layout_height="56dp" android:layout_marginEnd="4dp"
+        android:background="#F5C96A" android:visibility="gone"/>
+    <View android:id="@+id/job_overdue_stripe_1" android:layout_width="4dp"
+        android:layout_height="56dp" android:layout_marginEnd="4dp"
+        android:background="#FFB5A5" android:visibility="gone"/>
     <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical"
         android:gravity="center">
       <TextView android:id="@+id/job_day_1" android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -80,6 +86,11 @@
         android:layout_width="116dp" android:layout_height="wrap_content"
         android:layout_marginStart="7dp" android:orientation="vertical"
         android:gravity="center_vertical" android:paddingStart="9dp">
+      <TextView android:id="@+id/job_status_1" android:layout_width="match_parent"
+          android:layout_height="wrap_content" android:text=""
+          android:textColor="#F5DC9E" android:textStyle="bold"
+          android:textSize="10sp" android:layout_marginBottom="2dp"
+          android:visibility="gone"/>
       <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
           android:text="ITEMS" android:textColor="#D3E8DA" android:textStyle="bold"
           android:textSize="9sp"/>
@@ -95,6 +106,12 @@
   <LinearLayout android:id="@+id/job_card_2" android:layout_width="match_parent" android:layout_height="89dp"
       android:layout_marginBottom="6dp" android:orientation="horizontal" android:gravity="center_vertical"
       android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_job_card">
+    <View android:id="@+id/job_out_stripe_2" android:layout_width="4dp"
+        android:layout_height="56dp" android:layout_marginEnd="4dp"
+        android:background="#F5C96A" android:visibility="gone"/>
+    <View android:id="@+id/job_overdue_stripe_2" android:layout_width="4dp"
+        android:layout_height="56dp" android:layout_marginEnd="4dp"
+        android:background="#FFB5A5" android:visibility="gone"/>
     <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical"
         android:gravity="center">
       <TextView android:id="@+id/job_day_2" android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -122,6 +139,11 @@
         android:layout_width="116dp" android:layout_height="wrap_content"
         android:layout_marginStart="7dp" android:orientation="vertical"
         android:gravity="center_vertical" android:paddingStart="9dp">
+      <TextView android:id="@+id/job_status_2" android:layout_width="match_parent"
+          android:layout_height="wrap_content" android:text=""
+          android:textColor="#F5DC9E" android:textStyle="bold"
+          android:textSize="10sp" android:layout_marginBottom="2dp"
+          android:visibility="gone"/>
       <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
           android:text="ITEMS" android:textColor="#D3E8DA" android:textStyle="bold"
           android:textSize="9sp"/>
@@ -137,6 +159,12 @@
   <LinearLayout android:id="@+id/job_card_3" android:layout_width="match_parent" android:layout_height="89dp"
       android:layout_marginBottom="6dp" android:orientation="horizontal" android:gravity="center_vertical"
       android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_job_card">
+    <View android:id="@+id/job_out_stripe_3" android:layout_width="4dp"
+        android:layout_height="56dp" android:layout_marginEnd="4dp"
+        android:background="#F5C96A" android:visibility="gone"/>
+    <View android:id="@+id/job_overdue_stripe_3" android:layout_width="4dp"
+        android:layout_height="56dp" android:layout_marginEnd="4dp"
+        android:background="#FFB5A5" android:visibility="gone"/>
     <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical"
         android:gravity="center">
       <TextView android:id="@+id/job_day_3" android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -164,6 +192,11 @@
         android:layout_width="116dp" android:layout_height="wrap_content"
         android:layout_marginStart="7dp" android:orientation="vertical"
         android:gravity="center_vertical" android:paddingStart="9dp">
+      <TextView android:id="@+id/job_status_3" android:layout_width="match_parent"
+          android:layout_height="wrap_content" android:text=""
+          android:textColor="#F5DC9E" android:textStyle="bold"
+          android:textSize="10sp" android:layout_marginBottom="2dp"
+          android:visibility="gone"/>
       <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
           android:text="ITEMS" android:textColor="#D3E8DA" android:textStyle="bold"
           android:textSize="9sp"/>
