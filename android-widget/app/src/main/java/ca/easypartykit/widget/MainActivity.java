@@ -16,7 +16,7 @@ import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private WebView webView;
-    private static final String TRUSTED_HOST = "last-man-standing-hazel.vercel.app";
+    private static final String TRUSTED_HOST = android.net.Uri.parse(BuildConfig.APP_URL).getHost();
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
