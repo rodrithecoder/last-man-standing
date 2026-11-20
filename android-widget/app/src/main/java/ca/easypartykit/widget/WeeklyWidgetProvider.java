@@ -16,6 +16,30 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.Locale;
 
 public final class WeeklyWidgetProvider extends AppWidgetProvider {
+    private static final String ACTION_TAB = "ca.easypartykit.widget.CHANGE_TAB";
+    private static final String PREFS = "weekly";
+    private static final String TAB_KEY = "active_tab";
+
+    @Override public void onReceive(Context context, Intent intent) {
+        super.onReceive(context, intent);
+        if (intent == null || !ACTION_TAB.equals(intent.getAction())) return;
+        int widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+        if (widgetId < 0) return;
+        String tab = "out".equals(intent.getStringExtra("tab")) ? "out" : "upcoming";
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(TAB_KEY + widgetId, tab).apply();
+        render(context, AppWidgetManager.getInstance(context), widgetId);
+    }
+
+    private static PendingIntent tabIntent(Context context, int widgetId, String tab) {
+        Intent intent = new Intent(context, WeeklyWidgetProvider.class);
+        intent.setAction(ACTION_TAB);
+        intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId);
+        intent.putExtra("tab", tab);
+        intent.setData(android.net.Uri.parse("epkwidget://tab/" + widgetId + "/" + tab));
+        return PendingIntent.getBroadcast(context, widgetId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
     private static final int[] CARDS = {R.id.job_card_1, R.id.job_card_2, R.id.job_card_3};
     private static final int[] DAYS = {R.id.job_day_1, R.id.job_day_2, R.id.job_day_3};
     private static final int[] DATES = {R.id.job_date_1, R.id.job_date_2, R.id.job_date_3};
@@ -41,6 +65,15 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
         views.setOnClickPendingIntent(R.id.open_calendar, calendar);
         views.setOnClickPendingIntent(R.id.new_booking, openIntent(context, true, 2));
         for (int card : CARDS) views.setOnClickPendingIntent(card, calendar);
+        views.setOnClickPendingIntent(R.id.tab_upcoming, tabIntent(context, widgetId, "upcoming"));
+        views.setOnClickPendingIntent(R.id.tab_out, tabIntent(context, widgetId, "out"));
+        String tab = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(TAB_KEY + widgetId, "upcoming");
+        boolean showOut = "out".equals(tab);
+        views.setTextColor(R.id.tab_upcoming, android.graphics.Color.parseColor(
+            showOut ? "#C9E0D1" : "#F5DC9E"));
+        views.setTextColor(R.id.tab_out, android.graphics.Color.parseColor(
+            showOut ? "#F5DC9E" : "#C9E0D1"));
         reset(views);
 
         try {
@@ -64,7 +97,9 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
                     views.setTextViewText(R.id.collections,
                         snapshot.optString("expectedCollectionsLabel", "—"));
 
-                    JSONArray jobs = snapshot.optJSONArray("nextJobs");
+                    int outCount = snapshot.optInt("outCount", 0);
+                    views.setTextViewText(R.id.tab_out, "OUT" + (outCount > 0 ? " (" + outCount + ")" : ""));
+                    JSONArray jobs = snapshot.optJSONArray(showOut ? "outJobs" : "nextJobs");
                     int total = jobs == null ? 0 : Math.min(CARDS.length, jobs.length());
                     for (int i = 0; i < total; i++) {
                         JSONObject job = jobs.getJSONObject(i);
@@ -112,7 +147,8 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
                         views.setTextViewText(ITEM_NAMES[i], itemLabel.toString());
                         views.setTextViewText(ITEM_MORE[i], remaining > 0 ? "+" + remaining + " more" : "");
                     }
-                    if (total == 0) showEmptyJob(views, "No upcoming rentals");
+                    if (total == 0) showEmptyJob(views,
+                        showOut ? "No equipment currently out" : "No upcoming rentals");
                     String timestamp = snapshot.optString("generatedAt", "");
                     views.setTextViewText(R.id.updated,
                         timestamp.length() >= 16 ? "Synced " + timestamp.substring(0, 16).replace('T', ' ') + " UTC"
@@ -131,6 +167,7 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(R.id.metric_deliveries, "—");
         views.setTextViewText(R.id.metric_returns, "—");
         views.setTextViewText(R.id.overdue, "");
+        views.setTextViewText(R.id.tab_out, "OUT");
         views.setTextViewText(R.id.collections, "—");
         for (int i = 0; i < CARDS.length; i++) {
             views.setViewVisibility(CARDS[i], View.GONE);
