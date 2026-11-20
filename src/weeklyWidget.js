@@ -67,6 +67,21 @@ export function buildWeeklyWidgetSnapshot(bookings = [], payments = [], now = ne
   futureJobs.sort((a, b) =>
     a.date.localeCompare(b.date) || String(a.time).localeCompare(String(b.time)) || a.order - b.order
   );
+  // Separate cached Out tab: not mixed into the Upcoming list.
+  const outJobs = active.filter((b) => b.status === "out").map((b) => ({
+    id: b.id, date: b.endDate, time: b.etaBack || "",
+    ...summarizeRentalItems(b, itemDefs),
+    name: b.name || "Rental", salesRep: b.salesRep || "",
+    pickupLocation: b.serviceType === "pickup" && ["sergio", "rodri"].includes(b.pickupLocation)
+      ? b.pickupLocation : "",
+    status: "out", overdue: b.endDate < today,
+    type: "Return",
+  }));
+  outJobs.sort((a, b) =>
+    Number(b.overdue) - Number(a.overdue) ||
+    a.date.localeCompare(b.date) ||
+    String(a.time).localeCompare(String(b.time))
+  );
   const outstanding = thisWeek.reduce((sum, b) =>
     sum + Math.max(0, (Number(b.totalCost) || 0) - (paymentsByBooking.get(b.id) || 0)), 0
   );
@@ -82,6 +97,8 @@ export function buildWeeklyWidgetSnapshot(bookings = [], payments = [], now = ne
     expectedCollections: outstanding,
     expectedCollectionsLabel: dollar(outstanding),
     // Restrict customer details to upcoming jobs; widget stores only 3 rows.
-    nextJobs: futureJobs.slice(0, 3),
+    nextJobs: futureJobs.filter((job) => job.status !== "out").slice(0, 3),
+    outCount: outJobs.length,
+    outJobs: outJobs.slice(0, 3),
   };
 }

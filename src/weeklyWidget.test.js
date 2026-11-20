@@ -32,8 +32,9 @@ test("weekly snapshot accounts for partial payments and overdue returns", () => 
   assert.equal(alex.salesRep, "Lucia");
   assert.equal(alex.type, "Return");
   assert.equal(sam.type, "Pickup");
-  assert.equal(result.nextJobs[0].name, "Old");
-  assert.equal(result.nextJobs[0].overdue, true);
+  assert.equal(result.nextJobs.some((job) => job.status === "out"), false);
+  assert.equal(result.outJobs[0].name, "Old");
+  assert.equal(result.outJobs[0].overdue, true);
 });
 test("natural whole-dollar formatting with commas", () => {
   assert.equal(dollar(11993), "$11,993");
@@ -99,8 +100,28 @@ test("overdue out rental remains visible and flagged", () => {
     { id: "late", name: "Late", startDate: "2026-11-15", endDate: "2026-11-18",
       status: "out", serviceType: "pickup", totalCost: 100 },
   ], [], new Date(2026,10,20,12));
-  assert.equal(result.nextJobs[0].status, "out");
-  assert.equal(result.nextJobs[0].overdue, true);
-  assert.equal(result.nextJobs[0].type, "Return");
+  assert.equal(result.nextJobs.length, 0);
+  assert.equal(result.outJobs[0].status, "out");
+  assert.equal(result.outJobs[0].overdue, true);
+  assert.equal(result.outJobs[0].type, "Return");
   assert.equal(result.counts.overdue, 1);
+});
+
+test("Upcoming excludes Out while the Out tab lists active outstanding equipment", () => {
+  const bookings = [
+    {id:"p1",name:"Pending",startDate:"2026-11-21",endDate:"2026-11-22",
+     serviceType:"pickup",status:"active",totalCost:100},
+    {id:"o1",name:"Already out",startDate:"2026-11-19",endDate:"2026-11-23",
+     serviceType:"pickup",status:"out",pickupLocation:"sergio",totalCost:100},
+    {id:"late",name:"Late return",startDate:"2026-11-15",endDate:"2026-11-18",
+     serviceType:"delivery",status:"out",totalCost:100},
+  ];
+  const result=buildWeeklyWidgetSnapshot(bookings,[],new Date(2026,10,20,12));
+  assert.equal(result.outCount,2);
+  assert.equal(result.outJobs.length,2);
+  assert.equal(result.outJobs[0].name,"Late return");
+  assert.equal(result.outJobs[0].overdue,true);
+  assert.equal(result.outJobs[1].pickupLocation,"sergio");
+  assert.equal(result.nextJobs.some(j=>j.status==="out"),false);
+  assert.equal(result.nextJobs[0].name,"Pending");
 });
