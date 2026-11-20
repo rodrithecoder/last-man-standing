@@ -2054,6 +2054,8 @@ function BookingsList({
   requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, requestInvoice, paidIds,
 }) {
   const inputStyle = inp(isMobile);
+  const width = useWindowWidth();
+  const foldFriendly = !isMobile && width < 1200;
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -2132,7 +2134,7 @@ function BookingsList({
       ) : (
         <>
           {
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 12, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile || foldFriendly ? "minmax(0, 1fr)" : "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 12, alignItems: "start" }}>
               {filtered.map((b) => {
                 const st = bStatus(b);
                 const isDone = st === ST_DONE;
@@ -2191,24 +2193,24 @@ function BookingsList({
                     </span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</span>
                   </div>
-                  <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <Btn variant="ghost" onClick={() => requestInvoice(b)} style={{ whiteSpace: "nowrap" }}>
+                  <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <Btn variant="default" onClick={() => requestInvoice(b)} style={{ whiteSpace: "nowrap", minHeight: 44, padding: "10px 16px" }}>
                       🧾 Receipt
                     </Btn>
                   </div>
                   {!isDone && (
-                    <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       {st === ST_ACTIVE ? (
-                        <Btn variant="primary" fullWidth onClick={() => requestMarkOut(b)}>
+                        <Btn variant="primary" onClick={() => requestMarkOut(b)} style={{ minHeight: 44, padding: "10px 16px" }}>
                           {b.serviceType === "delivery" ? "🚚 Delivered" : "📦 Picked Up by Customer"}
                         </Btn>
                       ) : (
-                        <Btn variant="primary" fullWidth onClick={() => requestMarkReturned(b)}>
+                        <Btn variant="primary" onClick={() => requestMarkReturned(b)} style={{ minHeight: 44, padding: "10px 16px" }}>
                           ✓ Returned
                         </Btn>
                       )}
                       {!isPaid && (
-                        <Btn variant="ghost" onClick={() => requestRecordPayment(b)} style={{ whiteSpace: "nowrap" }}>
+                        <Btn variant="default" onClick={() => requestRecordPayment(b)} style={{ whiteSpace: "nowrap", minHeight: 44, padding: "10px 16px" }}>
                           💵 Payment
                         </Btn>
                       )}
@@ -2968,13 +2970,15 @@ function Header({ isMobile, bookings, totalRevenue }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, minWidth: 0 }}>
         <div style={{
-          width: isMobile ? 34 : 40, height: isMobile ? 34 : 40,
-          borderRadius: "50%", background: C.sunshine, color: C.accentDeep,
+          width: isMobile ? 39 : 48, height: isMobile ? 44 : 51,
+          borderRadius: 8, background: "#F8F6EF",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: isMobile ? 18 : 22, fontWeight: 800,
-          flexShrink: 0, boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
-        }} aria-label="EasyPartyKit.ca logo">
-          🎈
+          flexShrink: 0, overflow: "hidden",
+          boxShadow: "0 1px 3px rgba(23,30,18,0.17)",
+        }}>
+          <img src="/easy-party-kit-mark.svg" alt="Easy Party Kit logo"
+            width={isMobile ? 36 : 42} height={isMobile ? 42 : 49}
+            style={{ display: "block", objectFit: "contain" }} />
         </div>
         <div style={{ minWidth: 0 }}>
           <div style={{
