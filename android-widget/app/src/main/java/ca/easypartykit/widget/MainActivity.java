@@ -12,10 +12,12 @@ import android.webkit.WebViewClient;
 import android.webkit.WebResourceRequest;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private WebView webView;
+    private String lastSyncIssue = "Waiting for website data";
     private static final String TRUSTED_HOST = android.net.Uri.parse(BuildConfig.APP_URL).getHost();
 
     @Override public void onCreate(Bundle savedInstanceState) {
@@ -36,7 +38,11 @@ public final class MainActivity extends Activity {
                 if (json == null || json.length() > 30000) return;
                 runOnUiThread(() -> {
                     if (webView == null || webView.getUrl() == null ||
-                        !isTrusted(webView.getUrl())) return;
+                        !isTrusted(webView.getUrl())) {
+                        lastSyncIssue = "Widget sync blocked: unexpected app URL";
+                        Toast.makeText(MainActivity.this, lastSyncIssue, Toast.LENGTH_LONG).show();
+                        return;
+                    }
                     try {
                         JSONObject obj = new JSONObject(json);
                         if (obj.optInt("schemaVersion") != 1) return;
@@ -46,11 +52,26 @@ public final class MainActivity extends Activity {
                         int[] ids = manager.getAppWidgetIds(new ComponentName(
                             MainActivity.this, WeeklyWidgetProvider.class));
                         for (int id : ids) WeeklyWidgetProvider.render(MainActivity.this, manager, id);
-                    } catch (Exception ignored) { }
+                        lastSyncIssue = "Widget synced";
+                        Toast.makeText(MainActivity.this,
+                            "Widget synced: " + obj.getJSONObject("counts").optInt("rentals") +
+                            " rentals this week", Toast.LENGTH_LONG).show();
+                    } catch (Exception e) {
+                        lastSyncIssue = "Widget sync failed: invalid snapshot";
+                        Toast.makeText(MainActivity.this, lastSyncIssue, Toast.LENGTH_LONG).show();
+                    }
                 });
             }
         }, "EasyPartyWidget");
         webView.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (isTrusted(url)) {
+                    // The page may have loaded before the JS bridge status changed.
+                    // A webpage can invoke this after its bookings finish loading.
+                    view.evaluateJavascript("window.dispatchEvent(new Event('easy-party-widget-sync'))", null);
+                }
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
                 String url = req.getUrl().toString();
                 if (isTrusted(url)) return false;
