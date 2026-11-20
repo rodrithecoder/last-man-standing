@@ -3323,7 +3323,7 @@ export default function App() {
   useEffect(() => {
     if (loading || loadError) return;
     const syncWidget = () => {
-      const snapshot = buildWeeklyWidgetSnapshot(bookings, payments);
+      const snapshot = buildWeeklyWidgetSnapshot(bookings, payments, new Date(), settings.items || []);
       // Debug build can request this on demand after Supabase has loaded.
       window.__epkWeeklySnapshot = snapshot;
       if (typeof window.EasyPartyWidget?.update !== "function") return;
@@ -3340,7 +3340,7 @@ export default function App() {
       window.removeEventListener("easy-party-widget-sync", syncWidget);
       window.clearTimeout(retry);
     };
-  }, [bookings, payments, loading, loadError]);
+  }, [bookings, payments, settings.items, loading, loadError]);
 
   useEffect(() => {
     const action = new URLSearchParams(window.location.search).get("widget");
