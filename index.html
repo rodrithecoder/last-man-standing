@@ -5,18 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EasyPartyKit.ca — Party Rentals</title>
     <style>
-      /* Printing a receipt should produce the document, not the whole app.
-         The overlay already covers the screen; print just strips the chrome. */
+      /* Print only the invoice, never the fixed scrolling app overlay.
+         Hiding elements with visibility alone leaves their layout in place and
+         can cause mobile Chrome to repeat the document on several pages. */
       @media print {
-        @page { margin: 14mm; }
-        body { background: #fff !important; }
-        body * { visibility: hidden !important; }
-        .epk-doc-sheet, .epk-doc-sheet * { visibility: visible !important; }
+        @page { size: letter; margin: 14mm; }
+
+        html, body {
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          background: #fff !important;
+        }
+
+        /* Remove unrelated UI from the print layout completely. */
+        body:has(.epk-doc-sheet) *:not(.epk-doc-sheet):not(.epk-doc-sheet *):not(:has(.epk-doc-sheet)) {
+          display: none !important;
+        }
+
+        /* Flatten the document's ancestors (including the fixed modal).
+           This prevents the overlay and dashboard from creating extra pages. */
+        body *:has(.epk-doc-sheet) {
+          display: block !important;
+          position: static !important;
+          width: auto !important;
+          height: auto !important;
+          min-height: 0 !important;
+          max-height: none !important;
+          overflow: visible !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+          box-shadow: none !important;
+          transform: none !important;
+        }
+
         .epk-doc-actions { display: none !important; }
         .epk-doc-sheet {
-          position: absolute !important; left: 0; top: 0; width: 100%;
-          box-shadow: none !important; border: none !important; padding: 0 !important;
+          display: block !important;
+          position: static !important;
+          width: 100% !important;
+          box-sizing: border-box !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #fff !important;
+          border: none !important;
+          box-shadow: none !important;
         }
+        .epk-doc-sheet thead { display: table-header-group; }
+        .epk-doc-sheet tr { break-inside: avoid; }
       }
     </style>
   </head>

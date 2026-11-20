@@ -455,11 +455,22 @@ function calcTotal(itemsMap, itemDefs, svcType, deliveryFee, discount, discountM
   const disc = discountMode === "amt" ? Math.min(Math.max(d, 0), sub) : sub * (d / 100);
   return { itemsTotal, deliveryFee: fee, discountAmount: disc, totalCost: sub - disc };
 }
+// Whole-dollar formatting is presentation only; money in storage, inputs,
+// exports, and calculations keeps its existing full precision.
+const roundedDollarFormatter = new Intl.NumberFormat("en-CA", {
+  minimumFractionDigits: 0, maximumFractionDigits: 0,
+});
+function formatAmount(value) {
+  const n = Number(value);
+  return roundedDollarFormatter.format(Number.isFinite(n) ? n : 0);
+}
+function formatMoney(value) { return "$" + formatAmount(value); }
+
 // "10%" or "$25.00" — one place, so the form, the table and the receipt agree.
 function discountLabel(b) {
   const d = Number(b && b.discount) || 0;
   if (!d) return "";
-  return (b.discountMode === "amt") ? "$" + d.toFixed(2) : d + "%";
+  return (b.discountMode === "amt") ? formatMoney(d) : d + "%";
 }
 
 // CSV export helper (bookings only — keeps existing behavior)
@@ -1019,7 +1030,7 @@ function SettingsPanel({
                   <tr key={it.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: "6px 6px", fontFamily: T.sans, fontSize: 12, color: C.text }}>{it.name}</td>
                     <td style={{ padding: "6px 6px", fontFamily: T.sans, fontSize: 11, color: it.category ? C.textSub : C.textMuted }}>{itemCategory(it)}</td>
-                    <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, color: C.textSub }}>${it.price}</td>
+                    <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, color: C.textSub }}>${formatAmount(it.price)}</td>
                     <td style={{ padding: "6px 6px", fontFamily: T.mono, fontSize: 12, color: C.textSub }}>{it.inventory}</td>
                     <td style={{ padding: "6px 6px", whiteSpace: "nowrap" }}>
                       <Btn small onClick={() => startEditItem(it)} variant="ghost">Edit</Btn>{" "}
@@ -1283,7 +1294,7 @@ function BookingForm({
               return (
                 <tr key={it.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                   <td style={{ padding: "6px 6px", fontSize: 12, fontFamily: T.sans, color: C.text }}>{it.name}</td>
-                  <td style={{ padding: "6px 6px", fontSize: 12, fontFamily: T.mono, color: C.textSub }}>${it.price}</td>
+                  <td style={{ padding: "6px 6px", fontSize: 12, fontFamily: T.mono, color: C.textSub }}>${formatAmount(it.price)}</td>
                   <td style={{ padding: "4px 6px" }}>
                     <input type="number" min={0} max={it.inventory}
                       style={{ ...inp(false), fontSize: 12, width: 60, padding: "5px 6px", borderColor: err ? C.danger : C.border }}
@@ -1370,25 +1381,25 @@ function BookingForm({
             return (
               <div key={it.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, color: C.textSub, marginBottom: 4 }}>
                 <span>{it.name} × {qty}</span>
-                <span style={{ fontFamily: T.mono }}>${(qty * it.price).toFixed(2)}</span>
+                <span style={{ fontFamily: T.mono }}>${(qty * it.price).toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
               </div>
             );
           })}
           {form.serviceType === "delivery" && preview.deliveryFee > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, color: C.textSub, marginBottom: 4 }}>
               <span>Delivery</span>
-              <span style={{ fontFamily: T.mono }}>${preview.deliveryFee.toFixed(2)}</span>
+              <span style={{ fontFamily: T.mono }}>${preview.deliveryFee.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
             </div>
           )}
           {preview.discountAmount > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, color: C.danger, marginBottom: 4 }}>
-              <span>Discount ({form.discountMode === "amt" ? `$${form.discount}` : `${form.discount}%`})</span>
-              <span style={{ fontFamily: T.mono }}>-${preview.discountAmount.toFixed(2)}</span>
+              <span>Discount ({form.discountMode === "amt" ? formatMoney(form.discount) : `${form.discount}%`})</span>
+              <span style={{ fontFamily: T.mono }}>-${preview.discountAmount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
             </div>
           )}
           <div style={{ borderTop: `1px solid ${C.borderStrong}`, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 700, fontFamily: T.sans, fontSize: 14 }}>
             <span>Total</span>
-            <span style={{ fontFamily: T.mono }}>${preview.totalCost.toFixed(2)}</span>
+            <span style={{ fontFamily: T.mono }}>${preview.totalCost.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
           </div>
         </div>
       )}
@@ -1615,7 +1626,7 @@ function InvoiceDoc({ booking, business, itemDefs, categories, payments, mode, o
     itemDefs.filter((it) => booking.items && booking.items[it.id]), categories
   );
 
-  const money = (n) => "$" + (Number(n) || 0).toFixed(2);
+  const money = formatMoney;
   const lbl = { fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: C.textMuted, fontFamily: T.sans, fontWeight: 600 };
   const val = { fontSize: 12, color: C.text, fontFamily: T.sans };
   const row = { display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, padding: "3px 0" };
@@ -1760,6 +1771,161 @@ function InvoiceDoc({ booking, business, itemDefs, categories, payments, mode, o
   );
 }
 
+// Generates a shareable PNG directly with Canvas, without invoking Android printing.
+// Uses the same booking, payment and tax calculations as InvoiceDoc.
+function saveInvoiceAsPng(booking, business, itemDefs, categories, payments, mode) {
+  const paidAmount = (payments || [])
+    .filter((p) => p.bookingId === booking.id)
+    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const t = invoiceTotals(booking, business, paidAmount);
+  const isReceipt = mode === "receipt";
+  const items = groupByCategory(
+    itemDefs.filter((it) => booking.items && booking.items[it.id]), categories
+  );
+  const money = formatMoney;
+  const W = 650, S = 2, pad = 32, right = W - pad;
+  const canvas = document.createElement("canvas");
+  canvas.width = W * S;
+  canvas.height = 4000 * S; // temporary height; cropped to content at the end
+  const c = canvas.getContext("2d");
+  if (!c) throw new Error("Your browser could not create an image.");
+  c.scale(S, S);
+  c.fillStyle = "#fff";
+  c.fillRect(0, 0, W, 4000);
+  const ink = "#1c2620", muted = "#5e6a62", green = "#1f4d39";
+  const lineColor = "#e4e4dc", amber = "#7a5800";
+  let y = 38;
+  function label(txt, x, yy) {
+    c.font = "600 10px Arial, sans-serif"; c.fillStyle = muted;
+    c.textAlign = "left"; c.fillText(String(txt).toUpperCase(), x, yy);
+  }
+  function text(txt, x, yy, size = 13, bold = false, color = ink, align = "left") {
+    c.font = (bold ? "700 " : "400 ") + size + "px Arial, sans-serif";
+    c.fillStyle = color; c.textAlign = align;
+    c.fillText(String(txt ?? ""), x, yy);
+    c.textAlign = "left";
+  }
+  function rule(yy) {
+    c.beginPath(); c.moveTo(pad, yy); c.lineTo(right, yy);
+    c.strokeStyle = lineColor; c.lineWidth = 1; c.stroke();
+  }
+  function wrapped(txt, x, startY, maxWidth, size = 12, color = muted, bold = false) {
+    c.font = (bold ? "700 " : "400 ") + size + "px Arial, sans-serif";
+    c.fillStyle = color; c.textAlign = "left";
+    let yy = startY;
+    String(txt ?? "").split("\n").forEach((paragraph) => {
+      let line = "";
+      paragraph.split(/\s+/).forEach((word) => {
+        const candidate = line ? line + " " + word : word;
+        if (line && c.measureText(candidate).width > maxWidth) {
+          c.fillText(line, x, yy); yy += size + 5; line = word;
+        } else line = candidate;
+      });
+      if (line) c.fillText(line, x, yy);
+      yy += size + 5;
+    });
+    return yy;
+  }
+  text(isReceipt ? "Receipt" : "Invoice", W / 2, y, 25, true, green, "center");
+  y += 38;
+  const top = y;
+  text(business.name || "EasyPartyKit.ca", pad, y, 15, true);
+  y += 19;
+  for (const info of [business.address, business.phone, business.email, business.website,
+    business.gstNumber ? "GST/HST No. " + business.gstNumber : ""]) {
+    if (info) y = wrapped(info, pad, y, 295, 12);
+  }
+  const businessEnd = y;
+  label(isReceipt ? "Receipt #" : "Invoice #", 420, top);
+  text(booking.invoiceNo != null ? invoiceNoLabel(booking.invoiceNo) : "Not issued", 420, top + 18, 13, true);
+  label(isReceipt ? "Receipt Date" : "Invoice Date", 420, top + 39);
+  const issued = booking.invoiceIssuedAt;
+  text(issued ? localDateStr(new Date(issued)) : localDateStr(new Date()), 420, top + 57);
+  if (!isReceipt) {
+    label("Due Date", 420, top + 78);
+    text(dueDateStr(issued, business.dueDays), 420, top + 96);
+  }
+  y = Math.max(businessEnd, top + (isReceipt ? 76 : 113)) + 21;
+  const billTop = y;
+  label("Bill To", pad, billTop);
+  text(booking.name, pad, billTop + 19, 13, true);
+  let billY = billTop + 38;
+  for (const info of [booking.phone, booking.email, booking.address]) {
+    if (info) billY = wrapped(info, pad, billY, 300);
+  }
+  label("Rental Period", 356, billTop);
+  text(fmtDateShort(booking.startDate) + " – " + fmtDateShort(booking.endDate), 356, billTop + 19);
+  text(booking.serviceType === "delivery" ? "Delivery" : "Pickup", 356, billTop + 37, 12, false, muted);
+  if (booking.etaOut) text("Out approx. " + fmtTime(booking.etaOut), 356, billTop + 55, 11, false, muted);
+  if (booking.etaBack) text("Back approx. " + fmtTime(booking.etaBack), 356, billTop + (booking.etaOut ? 72 : 55), 11, false, muted);
+  y = Math.max(billY, billTop + (booking.etaBack ? 90 : booking.etaOut ? 73 : 55)) + 12;
+  c.fillStyle = t.due <= 0 ? "#e3f0e7" : "#fff4cc";
+  c.fillRect(pad, y, W - 2 * pad, 48);
+  text(isReceipt ? "Total Received" : "Amount Due", pad + 12, y + 29, 15, true, t.due <= 0 ? green : amber);
+  text(money(isReceipt ? t.paid : t.due), right - 12, y + 29, 19, true, ink, "right");
+  y += 62;
+  if (isReceipt && t.due > 0) {
+    text("Balance still outstanding: " + money(t.due), pad, y, 11, true, "#b73c2a");
+    y += 24;
+  }
+  label("Qty", pad + 4, y);
+  label("Description", pad + 60, y);
+  label("Unit Price", right - 174, y);
+  label("Amount", right - 66, y);
+  y += 13; rule(y); y += 18;
+  items.forEach(([category, group]) => {
+    if (items.length > 1) { label(category, pad + 4, y); y += 22; }
+    group.forEach((it) => {
+      const quantity = Number(booking.items[it.id]) || 0;
+      const nextY = wrapped(it.name, pad + 60, y, 230, 12, ink);
+      text(quantity, pad + 4, y, 12);
+      text(money(it.price), right - 80, y, 12, false, ink, "right");
+      text(money(quantity * it.price), right, y, 12, false, ink, "right");
+      y = Math.max(y + 25, nextY + 6);
+      rule(y - 9);
+    });
+    y += 4;
+  });
+  y += 12;
+  const sumLeft = 390;
+  function totalRow(name, value, bold = false, color = ink) {
+    text(name, sumLeft, y, 13, bold, color);
+    text(value, right, y, 13, bold, color, "right");
+    y += 23;
+  }
+  totalRow("Items", money(t.items));
+  if (t.fee > 0) totalRow("Delivery", money(t.fee));
+  if (t.disc > 0) totalRow("Discount", "-" + money(t.disc), false, "#b73c2a");
+  if (t.rate > 0) {
+    totalRow("Subtotal", money(t.net));
+    totalRow((business.taxLabel || "Tax") + " (" + t.rate + "%)", money(t.tax));
+  }
+  c.beginPath(); c.moveTo(sumLeft, y - 12); c.lineTo(right, y - 12);
+  c.strokeStyle = lineColor; c.lineWidth = 2; c.stroke();
+  totalRow("Total", money(t.total), true);
+  totalRow("Amount Paid", money(t.paid));
+  totalRow(t.due > 0 ? "Amount Due" : "Paid in Full", money(t.due), true, t.due > 0 ? "#b73c2a" : green);
+  if (business.paymentInstructions || business.terms) {
+    y += 9; rule(y); y += 24;
+    label("Terms & Conditions", pad, y); y += 20;
+    if (business.paymentInstructions) y = wrapped(business.paymentInstructions, pad, y, W - 2 * pad);
+    if (business.terms) y = wrapped(business.terms, pad, y, W - 2 * pad);
+  }
+  const finalHeight = Math.ceil(Math.max(y + 20, 300));
+  const output = document.createElement("canvas");
+  output.width = W * S; output.height = finalHeight * S;
+  const outCtx = output.getContext("2d");
+  if (!outCtx) throw new Error("Your browser could not export the image.");
+  outCtx.drawImage(canvas, 0, 0, output.width, output.height, 0, 0, output.width, output.height);
+  const link = document.createElement("a");
+  const safeNumber = booking.invoiceNo != null ? invoiceNoLabel(booking.invoiceNo) : "preview";
+  link.download = (isReceipt ? "Receipt-" : "Invoice-") + safeNumber + ".png";
+  link.href = output.toDataURL("image/png");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onClose, onIssue }) {
   const paidAmount = (payments || [])
     .filter((p) => p.bookingId === booking.id)
@@ -1768,6 +1934,7 @@ function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onC
   // Default to whichever document matches reality; the toggle still overrides.
   const [mode, setMode] = useState(t.due <= 0 && t.paid > 0 ? "receipt" : "invoice");
   const [issuing, setIssuing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
@@ -1775,6 +1942,19 @@ function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onC
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  function saveImage() {
+    if (exporting) return;
+    setErr(""); setExporting(true);
+    try {
+      saveInvoiceAsPng(booking, business, itemDefs, categories, payments, mode);
+    } catch (e) {
+      console.error("Invoice PNG export failed", e);
+      setErr("Couldn't save the image on this device. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function issue() {
     setIssuing(true); setErr("");
@@ -1810,7 +1990,7 @@ function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onC
           <span style={{ fontSize: 11, fontFamily: T.sans, color: mode === "receipt" && t.due > 0 ? C.warning : C.textMuted }}>
             {mode === "receipt"
               ? (t.due > 0
-                  ? `Not paid in full — this receipt shows ${"$" + t.paid.toFixed(2)} received and notes the balance.`
+                  ? `Not paid in full — this receipt shows ${"$" + formatAmount(t.paid)} received and notes the balance.`
                   : "Shows what was collected.")
               : "Shows what is still owed."}
           </span>
@@ -1820,7 +2000,12 @@ function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onC
                 {issuing ? "Getting number…" : "Issue number"}
               </Btn>
             ) : (
-              <Btn small onClick={() => window.print()}>🖨 Print / PDF</Btn>
+              <>
+                <Btn small variant="primary" onClick={saveImage} disabled={exporting}>
+                  {exporting ? "Saving…" : "Save as Image"}
+                </Btn>
+                <Btn small onClick={() => window.print()}>🖨 Print / PDF</Btn>
+              </>
             )}
             <Btn small variant="ghost" onClick={onClose}>Close</Btn>
           </div>
@@ -1880,6 +2065,8 @@ function BookingsList({
   requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, requestInvoice, paidIds,
 }) {
   const inputStyle = inp(isMobile);
+  const width = useWindowWidth();
+  const foldFriendly = !isMobile && width < 1200;
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -1957,8 +2144,8 @@ function BookingsList({
         </div>
       ) : (
         <>
-          {isMobile ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {
+            <div style={{ display: "grid", gridTemplateColumns: isMobile || foldFriendly ? "minmax(0, 1fr)" : "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 12, alignItems: "start" }}>
               {filtered.map((b) => {
                 const st = bStatus(b);
                 const isDone = st === ST_DONE;
@@ -1970,6 +2157,7 @@ function BookingsList({
                   border: `1px solid ${isDone ? C.accent : late ? C.danger : st === ST_OUT ? C.warning : C.border}`,
                   borderRadius: 3,
                   padding: "12px 14px",
+                  minWidth: 0,
                   opacity: isDone ? 0.85 : 1,
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -1993,7 +2181,7 @@ function BookingsList({
                         </div>
                       )}
                     </div>
-                    <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       {st !== ST_ACTIVE && (
                         <Btn small variant="ghost" onClick={() => requestStepBack(b)} title={isDone ? "Reopen — back to Out" : "Undo — back to Active"}>
                           ↩ {isDone ? "Reopen" : "Undo"}
@@ -2014,26 +2202,26 @@ function BookingsList({
                     <span style={{ fontSize: 11, color: C.textMuted, fontFamily: T.sans, background: C.bg, border: `1px solid ${C.border}`, padding: "2px 8px", borderRadius: 2 }}>
                       {b.serviceType === "delivery" ? "Delivery" : "Pickup"}
                     </span>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
                   </div>
-                  <div style={{ marginTop: 10, display: "flex", gap: 6 }}>
-                    <Btn variant="ghost" onClick={() => requestInvoice(b)} style={{ whiteSpace: "nowrap" }}>
+                  <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <Btn variant="default" onClick={() => requestInvoice(b)} style={{ whiteSpace: "nowrap", minHeight: 44, padding: "10px 16px" }}>
                       🧾 Receipt
                     </Btn>
                   </div>
                   {!isDone && (
-                    <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+                    <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       {st === ST_ACTIVE ? (
-                        <Btn variant="primary" fullWidth onClick={() => requestMarkOut(b)}>
+                        <Btn variant="primary" onClick={() => requestMarkOut(b)} style={{ minHeight: 44, padding: "10px 16px" }}>
                           {b.serviceType === "delivery" ? "🚚 Delivered" : "📦 Picked Up by Customer"}
                         </Btn>
                       ) : (
-                        <Btn variant="primary" fullWidth onClick={() => requestMarkReturned(b)}>
+                        <Btn variant="primary" onClick={() => requestMarkReturned(b)} style={{ minHeight: 44, padding: "10px 16px" }}>
                           ✓ Returned
                         </Btn>
                       )}
                       {!isPaid && (
-                        <Btn variant="ghost" onClick={() => requestRecordPayment(b)} style={{ whiteSpace: "nowrap" }}>
+                        <Btn variant="default" onClick={() => requestRecordPayment(b)} style={{ whiteSpace: "nowrap", minHeight: 44, padding: "10px 16px" }}>
                           💵 Payment
                         </Btn>
                       )}
@@ -2043,79 +2231,8 @@ function BookingsList({
                 );
               })}
             </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: T.sans }}>
-                <thead>
-                  <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                    {["Customer", "Sales Rep", "Period", "Days", ...itemDefs.map((it) => it.name), "Service", "Subtotal", "Delivery", "Disc.", "Total", ""].map((h) => (
-                      <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((b, i) => {
-                    const st = bStatus(b);
-                    const isDone = st === ST_DONE;
-                    const isPaid = paidIds.has(b.id);
-                    const late = isOverdue(b);
-                    return (
-                    <tr key={b.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.bg, opacity: isDone ? 0.7 : 1 }}>
-                      <td style={{ padding: "9px 10px", fontWeight: 600, color: C.text }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          {b.name}
-                          <StatusBadge status={st} paid={isPaid} overdue={late} />
-                          {late && <span style={{ fontSize: 10, color: C.danger, fontWeight: 600 }}>{daysOverdue(b)}d</span>}
-                        </div>
-                        {b.notes && <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{b.notes}</div>}
-                      </td>
-                      <td style={{ padding: "9px 10px", color: C.textSub }}>{b.salesRep}</td>
-                      <td style={{ padding: "9px 10px", color: C.textSub, whiteSpace: "nowrap" }}>
-                        {fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}
-                        <EtaLine booking={b} size={10} />
-                      </td>
-                      <td style={{ padding: "9px 10px", color: C.textMuted, fontFamily: T.mono, textAlign: "center" }}>{b.days}</td>
-                      {itemDefs.map((it) => (
-                        <td key={it.id} style={{ padding: "9px 10px", color: C.text, fontFamily: T.mono, textAlign: "center" }}>{b.items?.[it.id] || "—"}</td>
-                      ))}
-                      <td style={{ padding: "9px 10px" }}>
-                        <span style={{ fontSize: 10, color: C.textSub, border: `1px solid ${C.border}`, padding: "2px 7px", borderRadius: 2 }}>
-                          {b.serviceType === "delivery" ? "Delivery" : "Pickup"}
-                        </span>
-                        {b.address && <div style={{ marginTop: 3 }}><AddressLink address={b.address} size={10} compact /></div>}
-                      </td>
-                      <td style={{ padding: "9px 10px", color: C.textSub, fontFamily: T.mono }}>${b.itemsTotal?.toFixed(2) || "—"}</td>
-                      <td style={{ padding: "9px 10px", color: C.textSub, fontFamily: T.mono }}>{b.deliveryFee > 0 ? `$${b.deliveryFee.toFixed(2)}` : "—"}</td>
-                      <td style={{ padding: "9px 10px", color: b.discount > 0 ? C.danger : C.textMuted, fontFamily: T.mono }}>{b.discount > 0 ? `-${discountLabel(b)}` : "—"}</td>
-                      <td style={{ padding: "9px 10px", fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</td>
-                      <td style={{ padding: "9px 10px", whiteSpace: "nowrap" }}>
-                        {st === ST_ACTIVE && (
-                          <Btn small variant="primary" onClick={() => requestMarkOut(b)} style={{ marginRight: 4 }}>
-                            {b.serviceType === "delivery" ? "Delivered" : "Picked Up"}
-                          </Btn>
-                        )}
-                        {st === ST_OUT && (
-                          <Btn small variant="primary" onClick={() => requestMarkReturned(b)} style={{ marginRight: 4 }}>✓ Returned</Btn>
-                        )}
-                        {!isDone && !isPaid && (
-                          <Btn small variant="ghost" onClick={() => requestRecordPayment(b)} style={{ marginRight: 4 }}>💵</Btn>
-                        )}
-                        {st !== ST_ACTIVE && (
-                          <Btn small variant="ghost" onClick={() => requestStepBack(b)} style={{ marginRight: 4 }} title={isDone ? "Reopen — back to Out" : "Undo — back to Active"}>
-                            ↩ {isDone ? "Reopen" : "Undo"}
-                          </Btn>
-                        )}
-                        <Btn small variant="ghost" onClick={() => requestInvoice(b)} style={{ marginRight: 4 }} title="Receipt / invoice">🧾</Btn>
-                        <Btn small variant="ghost" onClick={() => startEditBooking(b)}>{isDone ? "Open" : "Edit"}</Btn>
-                        <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          }
+
 
           <div style={{ marginTop: 14, padding: "12px 14px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, display: "flex", gap: 28, flexWrap: "wrap", alignItems: "center" }}>
             {[
@@ -2132,7 +2249,7 @@ function BookingsList({
               </div>
             ))}
             <div style={{ marginLeft: "auto" }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${totalRev.toFixed(2)}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${totalRev.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</div>
               <div style={{ fontSize: 10, color: C.textMuted, fontFamily: T.sans, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 {filtersActive ? "Filtered Revenue" : "Total Revenue"}
               </div>
@@ -2340,8 +2457,8 @@ function SettlementDialog({
   const Row = ({ label, chetos, rodri, isNet }) => (
     <div style={{ display: "flex", fontSize: 12, padding: "6px 0", borderTop: isNet ? `1px solid ${C.borderStrong}` : "none", marginTop: isNet ? 6 : 0 }}>
       <span style={{ flex: 1, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>{label}</span>
-      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${chetos.toFixed(2)}</span>
-      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${rodri.toFixed(2)}</span>
+      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${chetos.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
+      <span style={{ width: 80, textAlign: "right", fontFamily: T.mono, color: isNet ? C.text : C.textSub, fontWeight: isNet ? 700 : 400 }}>${rodri.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
     </div>
   );
 
@@ -2373,7 +2490,7 @@ function SettlementDialog({
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ fontSize: 12, color: C.textSub, marginBottom: 4 }}>{whoPays}</div>
           <div style={{ fontSize: 26, fontFamily: T.mono, fontWeight: 800, color: C.accentDeep }}>
-            ${owesAmount.toFixed(2)}
+            ${owesAmount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
           </div>
         </div>
 
@@ -2622,12 +2739,12 @@ function AccountsView({
             General Account
           </div>
           <div style={{ fontSize: isMobile ? 28 : 36, fontWeight: 800, fontFamily: T.mono, lineHeight: 1.1 }}>
-            ${generalBalance.toFixed(2)}
+            ${generalBalance.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 8, fontFamily: T.sans, lineHeight: 1.6 }}>
-            Starting: <span style={{ fontFamily: T.mono }}>${(settings.startingGeneral || 0).toFixed(2)}</span>
+            Starting: <span style={{ fontFamily: T.mono }}>${(settings.startingGeneral || 0).toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
             <span style={{ margin: "0 8px" }}>·</span>
-            Collected: <span style={{ fontFamily: T.mono }}>${totalCollected.toFixed(2)}</span>
+            Collected: <span style={{ fontFamily: T.mono }}>${totalCollected.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
           </div>
         </div>
 
@@ -2650,7 +2767,7 @@ function AccountsView({
             </div>
           ) : (
             <div style={{ fontSize: isMobile ? 22 : 26, fontWeight: 700, fontFamily: T.mono, color: C.text, marginBottom: 12 }}>
-              ${investment.toFixed(2)}
+              ${investment.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
             </div>
           )}
 
@@ -2691,7 +2808,7 @@ function AccountsView({
 
             {hasProjection && (
               <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8, fontFamily: T.sans, lineHeight: 1.4 }}>
-                Projected adds <span style={{ fontFamily: T.mono, color: C.text, fontWeight: 600 }}>${projectedRevenue.toFixed(2)}</span> from active bookings.
+                Projected adds <span style={{ fontFamily: T.mono, color: C.text, fontWeight: 600 }}>${projectedRevenue.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span> from active bookings.
               </div>
             )}
           </div>
@@ -2713,15 +2830,15 @@ function AccountsView({
               {p.name}
             </div>
             <div style={{ fontSize: isMobile ? 24 : 30, fontWeight: 800, fontFamily: T.mono, color: p.net >= 0 ? C.text : C.danger, lineHeight: 1.1 }}>
-              {p.net < 0 ? "−" : ""}${Math.abs(p.net).toFixed(2)}
+              {p.net < 0 ? "−" : ""}${Math.abs(p.net).toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
             </div>
             <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 11, color: C.textSub, fontFamily: T.sans }}>
-              <span>Collected: <span style={{ fontFamily: T.mono, color: C.text }}>${p.collected.toFixed(2)}</span></span>
-              <span>Expenses: <span style={{ fontFamily: T.mono, color: C.danger }}>−${p.expensesAmt.toFixed(2)}</span></span>
+              <span>Collected: <span style={{ fontFamily: T.mono, color: C.text }}>${p.collected.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span></span>
+              <span>Expenses: <span style={{ fontFamily: T.mono, color: C.danger }}>−${p.expensesAmt.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span></span>
             </div>
             {p.starting !== 0 && (
               <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4, fontFamily: T.sans }}>
-                Starting: <span style={{ fontFamily: T.mono }}>${p.starting.toFixed(2)}</span>
+                Starting: <span style={{ fontFamily: T.mono }}>${p.starting.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
               </div>
             )}
           </div>
@@ -2744,7 +2861,7 @@ function AccountsView({
             Expenses (since last settle)
           </div>
           <div style={{ fontSize: 12, color: C.textSub, fontFamily: T.mono }}>
-            {expenses.length} item{expenses.length !== 1 ? "s" : ""} · ${totalExpenses.toFixed(2)}
+            {expenses.length} item{expenses.length !== 1 ? "s" : ""} · ${totalExpenses.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
           </div>
         </div>
         {expenses.length === 0 ? (
@@ -2773,7 +2890,7 @@ function AccountsView({
                       <span style={{ fontSize: 9, fontWeight: 700, color: C.accentDeep, background: C.sunshine, padding: "2px 6px", borderRadius: 2, letterSpacing: "0.06em" }}>INV</span>
                     )}
                   </td>
-                  <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.danger, fontWeight: 600 }}>−${e.amount.toFixed(2)}</td>
+                  <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.danger, fontWeight: 600 }}>−${e.amount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</td>
                   <td style={{ padding: "4px 8px", whiteSpace: "nowrap", textAlign: "right" }}>
                     <Btn small variant="ghost" onClick={() => onDeleteExpense(e)} style={{ color: C.danger }}>Remove</Btn>
                   </td>
@@ -2810,13 +2927,13 @@ function AccountsView({
                       {new Date(s.settledAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </td>
                     <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.textSub, whiteSpace: "nowrap" }}>
-                      ${s.chetosAmount.toFixed(2)} / <span style={{ color: C.danger }}>${s.chetosExpenses.toFixed(2)}</span>
+                      ${s.chetosAmount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })} / <span style={{ color: C.danger }}>${s.chetosExpenses.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
                     </td>
                     <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.textSub, whiteSpace: "nowrap" }}>
-                      ${s.rodriAmount.toFixed(2)} / <span style={{ color: C.danger }}>${s.rodriExpenses.toFixed(2)}</span>
+                      ${s.rodriAmount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })} / <span style={{ color: C.danger }}>${s.rodriExpenses.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
                     </td>
                     <td style={{ padding: "8px 8px", fontFamily: T.mono, color: C.accent, fontWeight: 700, whiteSpace: "nowrap" }}>
-                      ${(Math.abs(s.difference) / 2).toFixed(2)}
+                      ${(Math.abs(s.difference) / 2).toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}
                     </td>
                   </tr>
                 ))}
@@ -2829,30 +2946,42 @@ function AccountsView({
         )}
       </div>
 
-      {/* NEW: Vacations panel */}
-      <div style={{ marginTop: 18 }}>
-        <VacationsPanel
-          isMobile={isMobile}
-          vacations={vacations}
-          onAdd={onAddVacation}
-          onDelete={onDeleteVacation}
-        />
-      </div>
 
-      {/* NEW: Backup panel */}
-      <div style={{ marginTop: 4 }}>
-        <BackupPanel isMobile={isMobile} onBackup={onBackup} lastBackupAt={lastBackupAt} />
-      </div>
-
-      {/* Settings */}
-      <div style={{ marginTop: 18 }}>
-        <SettingsPanel {...settingsPanelProps} />
-      </div>
     </div>
   );
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
+function SettingsView({ isMobile, settingsPanelProps, vacations, onAddVacation, onDeleteVacation, onBackup, lastBackupAt }) {
+  return <div style={{ padding: isMobile ? 14 : 24, maxWidth: 800, margin: "0 auto" }}>
+    <div style={{ fontWeight: 800, fontSize: 19, fontFamily: T.sans, marginBottom: 14 }}>Settings</div>
+    <SettingsPanel {...settingsPanelProps} />
+    <VacationsPanel isMobile={isMobile} vacations={vacations} onAdd={onAddVacation} onDelete={onDeleteVacation} />
+    <BackupPanel isMobile={isMobile} onBackup={onBackup} lastBackupAt={lastBackupAt} />
+  </div>;
+}
+function SideNavigation({ active, onSelect, pendingReminders }) {
+  const tabs = [
+    ["calendar", "Calendar", "▦"], ["list", "Bookings", "≡"],
+    ["reminders", "Messages", "✉"], ["accounts", "Accounts", "$"], ["settings", "Settings", "⚙"],
+  ];
+  return <nav aria-label="Main navigation" style={{ width: 82, flexShrink: 0,
+    borderLeft: `1px solid ${C.border}`, background: C.surface, padding: "10px 5px",
+    display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, overflowY: "auto" }}>
+    {tabs.map(([id, label, icon]) => <button key={id} onClick={() => onSelect(id)}
+      type="button" aria-current={active === id ? "page" : undefined}
+      style={{ minHeight: 66, cursor: "pointer", borderRadius: 9,
+        background: active === id ? C.accentSoft : "transparent",
+        border: `1px solid ${active === id ? C.accent : "transparent"}`,
+        color: active === id ? C.accentDeep : C.textSub, fontFamily: T.sans,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+      <span aria-hidden="true" style={{ fontSize: 21 }}>{icon}</span>
+      <span style={{ fontSize: 10, fontWeight: active === id ? 700 : 500 }}>{label}</span>
+      {id === "reminders" && pendingReminders > 0 && <span style={{ fontSize: 9 }}>{pendingReminders}</span>}
+    </button>)}
+  </nav>;
+}
+
 function Header({ isMobile, bookings, totalRevenue }) {
   return (
     <div style={{
@@ -2864,13 +2993,15 @@ function Header({ isMobile, bookings, totalRevenue }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 14, minWidth: 0 }}>
         <div style={{
-          width: isMobile ? 34 : 40, height: isMobile ? 34 : 40,
-          borderRadius: "50%", background: C.sunshine, color: C.accentDeep,
+          width: isMobile ? 39 : 48, height: isMobile ? 44 : 51,
+          borderRadius: 8, background: "#F8F6EF",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: isMobile ? 18 : 22, fontWeight: 800,
-          flexShrink: 0, boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
-        }} aria-label="EasyPartyKit.ca logo">
-          🎈
+          flexShrink: 0, overflow: "hidden",
+          boxShadow: "0 1px 3px rgba(23,30,18,0.17)",
+        }}>
+          <img src="/easy-party-kit-mark.svg" alt="Easy Party Kit logo"
+            width={isMobile ? 36 : 42} height={isMobile ? 42 : 49}
+            style={{ display: "block", objectFit: "contain" }} />
         </div>
         <div style={{ minWidth: 0 }}>
           <div style={{
@@ -2893,7 +3024,7 @@ function Header({ isMobile, bookings, totalRevenue }) {
       <div style={{ display: "flex", gap: isMobile ? 14 : 24, alignItems: "center", flexShrink: 0 }}>
         {[
           { l: "Bookings", v: bookings.length },
-          { l: "Revenue", v: `$${totalRevenue.toFixed(2)}` },
+          { l: "Revenue", v: `$${totalRevenue.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}` },
         ].map((s) => (
           <div key={s.l} style={{ textAlign: "right" }}>
             <div style={{ fontSize: isMobile ? 14 : 17, fontWeight: 800, color: C.sunshine, fontFamily: T.mono }}>{s.v}</div>
@@ -2916,9 +3047,33 @@ function TabBar({ active, onChange, tabs, bottom }) {
     }}>
       {tabs.map((t) => (
         <button key={t.id} onClick={() => onChange(t.id)}
-          style={{ flex: 1, padding: bottom ? "10px 0 8px" : "9px 16px", border: "none", background: "none", cursor: "pointer", fontFamily: T.sans, fontSize: 12, color: active === t.id ? C.accent : C.textMuted, fontWeight: active === t.id ? 700 : 500, borderBottom: !bottom && active === t.id ? `2px solid ${C.accent}` : "2px solid transparent", transition: "all 0.15s", display: "flex", flexDirection: bottom ? "column" : "row", alignItems: "center", gap: 3 }}>
-          {bottom && <span style={{ fontSize: 18 }}>{t.icon}</span>}
-          <span style={{ fontSize: bottom ? 10 : 12, letterSpacing: bottom ? "0.04em" : 0, textTransform: bottom ? "uppercase" : "none" }}>{t.label}</span>
+          aria-label={t.id === "form" ? (t.label === "Edit" ? "Edit booking" : "New booking") : t.label}
+          style={{
+            flex: 1, minWidth: 0,
+            padding: bottom ? "7px 0 6px" : "9px 16px",
+            border: "none", background: "none", cursor: "pointer",
+            fontFamily: T.sans, fontSize: 12,
+            color: active === t.id ? C.accent : C.textMuted,
+            fontWeight: active === t.id ? 700 : 500,
+            borderBottom: !bottom && active === t.id ? `2px solid ${C.accent}` : "2px solid transparent",
+            transition: "all 0.15s", display: "flex",
+            flexDirection: bottom ? "column" : "row", alignItems: "center", justifyContent: "center", gap: 3,
+          }}>
+          {bottom && t.id === "form" ? (
+            <span style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: C.accent, border: `2px solid ${C.accentDeep}`,
+              boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#fff", boxShadow: "0 2px 7px rgba(0,0,0,.19)",
+              fontSize: 25, fontWeight: 600, lineHeight: 1,
+            }} aria-hidden="true">{t.icon}</span>
+          ) : bottom ? <span style={{ fontSize: 18 }}>{t.icon}</span> : null}
+          <span style={{
+            fontSize: bottom ? 10 : 12, letterSpacing: bottom ? "0.04em" : 0,
+            textTransform: bottom ? "uppercase" : "none",
+            color: bottom && t.id === "form" ? C.accentDeep : undefined,
+            fontWeight: bottom && t.id === "form" ? 700 : undefined,
+          }}>{t.label}</span>
         </button>
       ))}
     </div>
@@ -3164,6 +3319,7 @@ export default function App() {
 
   const [mobileTab, setMobileTab] = useState("calendar");
   const [desktopTab, setDesktopTab] = useState("calendar");
+  const [desktopFormOpen, setDesktopFormOpen] = useState(false);
   const [calMonth, setCalMonth] = useState(0);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -3256,7 +3412,7 @@ export default function App() {
       else if (f.discountMode === "amt") {
         const sub = itemDefs.reduce((s, it) => s + (parseInt(f.items[it.id]) || 0) * it.price, 0)
           + (f.serviceType === "delivery" ? parseFloat(f.deliveryFee) || 0 : 0);
-        if (d > sub) e.discount = `Can't discount more than the $${sub.toFixed(2)} subtotal.`;
+        if (d > sub) e.discount = `Can't discount more than the $${sub.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })} subtotal.`;
       } else if (d > 100) e.discount = "A percentage can't be over 100.";
     }
     return e;
@@ -3306,6 +3462,7 @@ export default function App() {
     setEditingBookingId(null);
     setTimeout(() => setSuccessMsg(""), 3000);
     if (isMobile) setMobileTab("list");
+    else { setDesktopFormOpen(false); setDesktopTab("calendar"); }
   }
 
   function startEditBooking(b) {
@@ -3331,12 +3488,14 @@ export default function App() {
     setFormErrors({});
     setEditingBookingId(b.id);
     if (isMobile) setMobileTab("form");
+    else setDesktopFormOpen(true);
   }
 
   function cancelEdit() {
     setFormRaw(EMPTY_FORM);
     setFormErrors({});
     setEditingBookingId(null);
+    setDesktopFormOpen(false);
   }
 
   function requestRemoveBooking(b) {
@@ -3562,6 +3721,21 @@ export default function App() {
     return C.cap100;
   }
 
+  function navigateToSettings() {
+    if (!settingsOpen || !settingsDraft) {
+      setSettingsDraft({ ...settings, items: settings.items.map(i => ({ ...i })),
+        categories: [...settingsCategories(settings)] });
+      setSettingsOpen(true);
+    }
+    if (isMobile) setMobileTab("settings");
+    else setDesktopTab("settings");
+  }
+  function toggleDesktopForm() {
+    if (desktopFormOpen) { if (editingBookingId) cancelEdit(); else setDesktopFormOpen(false); return; }
+    if (editingBookingId) cancelEdit();
+    setDesktopFormOpen(true);
+  }
+
   const settingsPanelProps = {
     isMobile, settings, settingsOpen, setSettingsOpen,
     settingsDraft, setSettingsDraft, settingsErr, setSettingsErr,
@@ -3598,6 +3772,9 @@ export default function App() {
     requestMarkOut, requestMarkReturned, requestRecordPayment, requestStepBack, requestInvoice, paidIds,
   };
 
+  const settingsViewProps = { isMobile, settingsPanelProps, vacations,
+    onAddVacation: addVacation, onDeleteVacation: requestDeleteVacation,
+    onBackup: runFullBackup, lastBackupAt };
   const accountsProps = {
     isMobile, settings, payments, settlements, expenses,
     generalBalance, totalCollected, totalExpenses,
@@ -3665,13 +3842,15 @@ export default function App() {
         {mobileTab === "list" && <BookingsList {...listProps} />}
         {mobileTab === "reminders" && <RemindersView {...remindersProps} />}
         {mobileTab === "accounts" && <AccountsView {...accountsProps} />}
+        {mobileTab === "settings" && <SettingsView {...settingsViewProps} />}
         {mobileTab === "form" && <BookingForm {...bookingFormProps} />}
-        <TabBar bottom active={mobileTab} onChange={setMobileTab}
+        <TabBar bottom active={mobileTab} onChange={(tab) => tab === "settings" ? navigateToSettings() : setMobileTab(tab)}
           tabs={[
             { id: "calendar", label: "Cal", icon: "▦" },
             { id: "list", label: "Bookings", icon: "≡" },
             { id: "reminders", label: pendingReminders ? "Msgs " + pendingReminders : "Msgs", icon: "💬" },
             { id: "accounts", label: "$", icon: "$" },
+            { id: "settings", label: "Settings", icon: "⚙" },
             { id: "form", label: editingBookingId ? "Edit" : "New", icon: editingBookingId ? "✎" : "+" },
           ]} />
         <ConfirmDialog
@@ -3726,25 +3905,45 @@ export default function App() {
           onDismiss={() => setBackupBannerDismissed(true)}
         />
       )}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <div style={{ width: 340, minWidth: 300, background: C.bg, borderRight: `1px solid ${C.border}`, overflowY: "auto" }}>
-          <BookingForm {...bookingFormProps} />
+      <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
+        <div style={{ flex: "0 0 68px", background: C.bg, borderRight: `1px solid ${C.border}`,
+          display: "flex", alignItems: "center", justifyContent: "flex-start",
+          flexDirection: "column", paddingTop: 14, boxSizing: "border-box" }}>
+          <button type="button" aria-expanded={desktopFormOpen}
+            aria-label={desktopFormOpen ? "Close booking form" : "New booking"} onClick={toggleDesktopForm}
+            style={{ width: 54, height: 54, borderRadius: "50%", border: `2px solid ${C.accentDeep}`,
+              background: C.accent, color: "#fff", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 3px 10px rgba(0,0,0,.18)", fontFamily: T.sans }}>
+            <span style={{ fontSize: 24, lineHeight: 1 }}>{desktopFormOpen ? "×" : "+"}</span>
+            <span style={{ fontSize: 9, fontWeight: 700 }}>{desktopFormOpen ? "Close" : "New"}</span>
+          </button>
         </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: C.surface }}>
-          <TabBar active={desktopTab} onChange={setDesktopTab}
-            tabs={[
-              { id: "calendar", label: "Calendar" },
-              { id: "list", label: "Bookings" },
-              { id: "reminders", label: pendingReminders ? "Messages (" + pendingReminders + ")" : "Messages" },
-              { id: "accounts", label: "Accounts" },
-            ]} />
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {desktopTab === "calendar" && <CalendarView {...calendarProps} />}
-            {desktopTab === "list" && <BookingsList {...listProps} />}
-            {desktopTab === "reminders" && <RemindersView {...remindersProps} />}
-            {desktopTab === "accounts" && <AccountsView {...accountsProps} />}
+        <main style={{ flex: 1, minWidth: 0, overflowY: "auto", background: C.surface }}>
+          {desktopTab === "calendar" && <CalendarView {...calendarProps} />}
+          {desktopTab === "list" && <BookingsList {...listProps} />}
+          {desktopTab === "reminders" && <RemindersView {...remindersProps} />}
+          {desktopTab === "accounts" && <AccountsView {...accountsProps} />}
+          {desktopTab === "settings" && <SettingsView {...settingsViewProps} />}
+        </main>
+        <SideNavigation active={desktopTab} pendingReminders={pendingReminders}
+          onSelect={(tab) => tab === "settings" ? navigateToSettings() : setDesktopTab(tab)} />
+        {desktopFormOpen && <aside aria-label={editingBookingId ? "Edit booking" : "New booking"}
+          style={{ position: "absolute", zIndex: 10, top: 0, bottom: 0, left: 68,
+            width: "min(400px, calc(100% - 156px))", background: C.surface,
+            borderRight: `1px solid ${C.borderStrong}`, boxShadow: "5px 0 20px rgba(0,0,0,.15)",
+            overflowY: "auto" }}>
+          <div style={{ position: "sticky", top: 0, zIndex: 1, background: C.accentSoft,
+            padding: "8px 12px", borderBottom: `1px solid ${C.border}`, display: "flex",
+            alignItems: "center", justifyContent: "space-between" }}>
+            <strong style={{ fontFamily: T.sans, fontSize: 12 }}>{editingBookingId ? "Edit Booking" : "New Booking"}</strong>
+            <button type="button" aria-label="Close booking form" onClick={() =>
+              editingBookingId ? cancelEdit() : setDesktopFormOpen(false)}
+              style={{ minWidth: 44, minHeight: 44, background: "transparent",
+                border: 0, cursor: "pointer", fontSize: 24, color: C.textSub }}>×</button>
           </div>
-        </div>
+          <BookingForm {...bookingFormProps} />
+        </aside>}
       </div>
       <ConfirmDialog
         open={!!confirmState}
