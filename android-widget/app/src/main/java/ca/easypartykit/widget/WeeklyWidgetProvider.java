@@ -23,6 +23,9 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
     private static final int[] DETAILS = {R.id.job_detail_1, R.id.job_detail_2, R.id.job_detail_3};
     private static final int[] REPS = {R.id.job_rep_1, R.id.job_rep_2, R.id.job_rep_3};
     private static final int[] PICKUPS = {R.id.job_pickup_1, R.id.job_pickup_2, R.id.job_pickup_3};
+    private static final int[] STATUSES = {R.id.job_status_1, R.id.job_status_2, R.id.job_status_3};
+    private static final int[] OUT_STRIPES = {R.id.job_out_stripe_1, R.id.job_out_stripe_2, R.id.job_out_stripe_3};
+    private static final int[] OVERDUE_STRIPES = {R.id.job_overdue_stripe_1, R.id.job_overdue_stripe_2, R.id.job_overdue_stripe_3};
     private static final int[] ITEM_BOXES = {R.id.job_items_container_1, R.id.job_items_container_2, R.id.job_items_container_3};
     private static final int[] ITEM_NAMES = {R.id.job_items_1, R.id.job_items_2, R.id.job_items_3};
     private static final int[] ITEM_MORE = {R.id.job_more_1, R.id.job_more_2, R.id.job_more_3};
@@ -71,6 +74,16 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
                             date.format(DateTimeFormatter.ofPattern("EEE", Locale.CANADA)).toUpperCase(Locale.CANADA));
                         views.setTextViewText(DATES[i], String.valueOf(date.getDayOfMonth()));
                         views.setTextViewText(NAMES[i], job.optString("name", "Rental"));
+                        boolean isOut = "out".equals(job.optString("status", ""));
+                        boolean isOverdue = isOut && job.optBoolean("overdue", false);
+                        views.setTextViewText(STATUSES[i], isOverdue ? "OVERDUE" : isOut ? "● OUT" : "");
+                        views.setTextColor(STATUSES[i], android.graphics.Color.parseColor(
+                            isOverdue ? "#FFB5A5" : "#F5DC9E"));
+                        views.setViewVisibility(STATUSES[i], isOut ? View.VISIBLE : View.GONE);
+                        views.setViewVisibility(OUT_STRIPES[i],
+                            isOut && !isOverdue ? View.VISIBLE : View.GONE);
+                        views.setViewVisibility(OVERDUE_STRIPES[i],
+                            isOverdue ? View.VISIBLE : View.GONE);
                         String type = job.optString("type", "Rental");
                         String time = job.optString("time", "").trim();
                         views.setTextViewText(DETAILS[i], type + (time.isEmpty() ? "" : " · " + time));
@@ -122,6 +135,10 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
         for (int i = 0; i < CARDS.length; i++) {
             views.setViewVisibility(CARDS[i], View.GONE);
             views.setViewVisibility(ITEM_BOXES[i], View.GONE);
+            views.setTextViewText(STATUSES[i], "");
+            views.setViewVisibility(STATUSES[i], View.GONE);
+            views.setViewVisibility(OUT_STRIPES[i], View.GONE);
+            views.setViewVisibility(OVERDUE_STRIPES[i], View.GONE);
             views.setTextViewText(ITEM_NAMES[i], "");
             views.setTextViewText(ITEM_MORE[i], "");
             views.setTextViewText(PICKUPS[i], "");
