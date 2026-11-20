@@ -1760,6 +1760,161 @@ function InvoiceDoc({ booking, business, itemDefs, categories, payments, mode, o
   );
 }
 
+// Generates a shareable PNG directly with Canvas, without invoking Android printing.
+// Uses the same booking, payment and tax calculations as InvoiceDoc.
+function saveInvoiceAsPng(booking, business, itemDefs, categories, payments, mode) {
+  const paidAmount = (payments || [])
+    .filter((p) => p.bookingId === booking.id)
+    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const t = invoiceTotals(booking, business, paidAmount);
+  const isReceipt = mode === "receipt";
+  const items = groupByCategory(
+    itemDefs.filter((it) => booking.items && booking.items[it.id]), categories
+  );
+  const money = (value) => "$" + (Number(value) || 0).toFixed(2);
+  const W = 650, S = 2, pad = 32, right = W - pad;
+  const canvas = document.createElement("canvas");
+  canvas.width = W * S;
+  canvas.height = 4000 * S; // temporary height; cropped to content at the end
+  const c = canvas.getContext("2d");
+  if (!c) throw new Error("Your browser could not create an image.");
+  c.scale(S, S);
+  c.fillStyle = "#fff";
+  c.fillRect(0, 0, W, 4000);
+  const ink = "#1c2620", muted = "#5e6a62", green = "#1f4d39";
+  const lineColor = "#e4e4dc", amber = "#7a5800";
+  let y = 38;
+  function label(txt, x, yy) {
+    c.font = "600 10px Arial, sans-serif"; c.fillStyle = muted;
+    c.textAlign = "left"; c.fillText(String(txt).toUpperCase(), x, yy);
+  }
+  function text(txt, x, yy, size = 13, bold = false, color = ink, align = "left") {
+    c.font = (bold ? "700 " : "400 ") + size + "px Arial, sans-serif";
+    c.fillStyle = color; c.textAlign = align;
+    c.fillText(String(txt ?? ""), x, yy);
+    c.textAlign = "left";
+  }
+  function rule(yy) {
+    c.beginPath(); c.moveTo(pad, yy); c.lineTo(right, yy);
+    c.strokeStyle = lineColor; c.lineWidth = 1; c.stroke();
+  }
+  function wrapped(txt, x, startY, maxWidth, size = 12, color = muted, bold = false) {
+    c.font = (bold ? "700 " : "400 ") + size + "px Arial, sans-serif";
+    c.fillStyle = color; c.textAlign = "left";
+    let yy = startY;
+    String(txt ?? "").split("\n").forEach((paragraph) => {
+      let line = "";
+      paragraph.split(/\s+/).forEach((word) => {
+        const candidate = line ? line + " " + word : word;
+        if (line && c.measureText(candidate).width > maxWidth) {
+          c.fillText(line, x, yy); yy += size + 5; line = word;
+        } else line = candidate;
+      });
+      if (line) c.fillText(line, x, yy);
+      yy += size + 5;
+    });
+    return yy;
+  }
+  text(isReceipt ? "Receipt" : "Invoice", W / 2, y, 25, true, green, "center");
+  y += 38;
+  const top = y;
+  text(business.name || "EasyPartyKit.ca", pad, y, 15, true);
+  y += 19;
+  for (const info of [business.address, business.phone, business.email, business.website,
+    business.gstNumber ? "GST/HST No. " + business.gstNumber : ""]) {
+    if (info) y = wrapped(info, pad, y, 295, 12);
+  }
+  const businessEnd = y;
+  label(isReceipt ? "Receipt #" : "Invoice #", 420, top);
+  text(booking.invoiceNo != null ? invoiceNoLabel(booking.invoiceNo) : "Not issued", 420, top + 18, 13, true);
+  label(isReceipt ? "Receipt Date" : "Invoice Date", 420, top + 39);
+  const issued = booking.invoiceIssuedAt;
+  text(issued ? localDateStr(new Date(issued)) : localDateStr(new Date()), 420, top + 57);
+  if (!isReceipt) {
+    label("Due Date", 420, top + 78);
+    text(dueDateStr(issued, business.dueDays), 420, top + 96);
+  }
+  y = Math.max(businessEnd, top + (isReceipt ? 76 : 113)) + 21;
+  const billTop = y;
+  label("Bill To", pad, billTop);
+  text(booking.name, pad, billTop + 19, 13, true);
+  let billY = billTop + 38;
+  for (const info of [booking.phone, booking.email, booking.address]) {
+    if (info) billY = wrapped(info, pad, billY, 300);
+  }
+  label("Rental Period", 356, billTop);
+  text(fmtDateShort(booking.startDate) + " – " + fmtDateShort(booking.endDate), 356, billTop + 19);
+  text(booking.serviceType === "delivery" ? "Delivery" : "Pickup", 356, billTop + 37, 12, false, muted);
+  if (booking.etaOut) text("Out approx. " + fmtTime(booking.etaOut), 356, billTop + 55, 11, false, muted);
+  if (booking.etaBack) text("Back approx. " + fmtTime(booking.etaBack), 356, billTop + (booking.etaOut ? 72 : 55), 11, false, muted);
+  y = Math.max(billY, billTop + (booking.etaBack ? 90 : booking.etaOut ? 73 : 55)) + 12;
+  c.fillStyle = t.due <= 0 ? "#e3f0e7" : "#fff4cc";
+  c.fillRect(pad, y, W - 2 * pad, 48);
+  text(isReceipt ? "Total Received" : "Amount Due", pad + 12, y + 29, 15, true, t.due <= 0 ? green : amber);
+  text(money(isReceipt ? t.paid : t.due), right - 12, y + 29, 19, true, ink, "right");
+  y += 62;
+  if (isReceipt && t.due > 0) {
+    text("Balance still outstanding: " + money(t.due), pad, y, 11, true, "#b73c2a");
+    y += 24;
+  }
+  label("Qty", pad + 4, y);
+  label("Description", pad + 60, y);
+  label("Unit Price", right - 174, y);
+  label("Amount", right - 66, y);
+  y += 13; rule(y); y += 18;
+  items.forEach(([category, group]) => {
+    if (items.length > 1) { label(category, pad + 4, y); y += 22; }
+    group.forEach((it) => {
+      const quantity = Number(booking.items[it.id]) || 0;
+      const nextY = wrapped(it.name, pad + 60, y, 230, 12, ink);
+      text(quantity, pad + 4, y, 12);
+      text(money(it.price), right - 80, y, 12, false, ink, "right");
+      text(money(quantity * it.price), right, y, 12, false, ink, "right");
+      y = Math.max(y + 25, nextY + 6);
+      rule(y - 9);
+    });
+    y += 4;
+  });
+  y += 12;
+  const sumLeft = 390;
+  function totalRow(name, value, bold = false, color = ink) {
+    text(name, sumLeft, y, 13, bold, color);
+    text(value, right, y, 13, bold, color, "right");
+    y += 23;
+  }
+  totalRow("Items", money(t.items));
+  if (t.fee > 0) totalRow("Delivery", money(t.fee));
+  if (t.disc > 0) totalRow("Discount", "-" + money(t.disc), false, "#b73c2a");
+  if (t.rate > 0) {
+    totalRow("Subtotal", money(t.net));
+    totalRow((business.taxLabel || "Tax") + " (" + t.rate + "%)", money(t.tax));
+  }
+  c.beginPath(); c.moveTo(sumLeft, y - 12); c.lineTo(right, y - 12);
+  c.strokeStyle = lineColor; c.lineWidth = 2; c.stroke();
+  totalRow("Total", money(t.total), true);
+  totalRow("Amount Paid", money(t.paid));
+  totalRow(t.due > 0 ? "Amount Due" : "Paid in Full", money(t.due), true, t.due > 0 ? "#b73c2a" : green);
+  if (business.paymentInstructions || business.terms) {
+    y += 9; rule(y); y += 24;
+    label("Terms & Conditions", pad, y); y += 20;
+    if (business.paymentInstructions) y = wrapped(business.paymentInstructions, pad, y, W - 2 * pad);
+    if (business.terms) y = wrapped(business.terms, pad, y, W - 2 * pad);
+  }
+  const finalHeight = Math.ceil(Math.max(y + 20, 300));
+  const output = document.createElement("canvas");
+  output.width = W * S; output.height = finalHeight * S;
+  const outCtx = output.getContext("2d");
+  if (!outCtx) throw new Error("Your browser could not export the image.");
+  outCtx.drawImage(canvas, 0, 0, output.width, output.height, 0, 0, output.width, output.height);
+  const link = document.createElement("a");
+  const safeNumber = booking.invoiceNo != null ? invoiceNoLabel(booking.invoiceNo) : "preview";
+  link.download = (isReceipt ? "Receipt-" : "Invoice-") + safeNumber + ".png";
+  link.href = output.toDataURL("image/png");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onClose, onIssue }) {
   const paidAmount = (payments || [])
     .filter((p) => p.bookingId === booking.id)
@@ -1768,6 +1923,7 @@ function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onC
   // Default to whichever document matches reality; the toggle still overrides.
   const [mode, setMode] = useState(t.due <= 0 && t.paid > 0 ? "receipt" : "invoice");
   const [issuing, setIssuing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
@@ -1775,6 +1931,19 @@ function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onC
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  function saveImage() {
+    if (exporting) return;
+    setErr(""); setExporting(true);
+    try {
+      saveInvoiceAsPng(booking, business, itemDefs, categories, payments, mode);
+    } catch (e) {
+      console.error("Invoice PNG export failed", e);
+      setErr("Couldn't save the image on this device. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function issue() {
     setIssuing(true); setErr("");
@@ -1820,7 +1989,12 @@ function InvoiceOverlay({ booking, business, itemDefs, categories, payments, onC
                 {issuing ? "Getting number…" : "Issue number"}
               </Btn>
             ) : (
-              <Btn small onClick={() => window.print()}>🖨 Print / PDF</Btn>
+              <>
+                <Btn small variant="primary" onClick={saveImage} disabled={exporting}>
+                  {exporting ? "Saving…" : "Save as Image"}
+                </Btn>
+                <Btn small onClick={() => window.print()}>🖨 Print / PDF</Btn>
+              </>
             )}
             <Btn small variant="ghost" onClick={onClose}>Close</Btn>
           </div>
