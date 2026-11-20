@@ -3323,9 +3323,12 @@ export default function App() {
   useEffect(() => {
     if (loading || loadError) return;
     const syncWidget = () => {
+      const snapshot = buildWeeklyWidgetSnapshot(bookings, payments);
+      // Debug build can request this on demand after Supabase has loaded.
+      window.__epkWeeklySnapshot = snapshot;
       if (typeof window.EasyPartyWidget?.update !== "function") return;
       try {
-        window.EasyPartyWidget.update(JSON.stringify(buildWeeklyWidgetSnapshot(bookings, payments)));
+        window.EasyPartyWidget.update(JSON.stringify(snapshot));
       } catch (err) {
         console.warn("Android widget sync failed", err);
       }
