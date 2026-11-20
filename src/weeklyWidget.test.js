@@ -27,11 +27,13 @@ test("weekly snapshot accounts for partial payments and overdue returns", () => 
   assert.deepEqual(result.counts, { rentals: 2, deliveries: 1, returns: 1, overdue: 1 });
   assert.equal(result.expectedCollections, 1000.5);
   assert.equal(result.expectedCollectionsLabel, "$1,001");
-  assert.equal(result.nextJobs[0].name, "Alex");
-  assert.equal(result.nextJobs[0].salesRep, "Lucia");
-  assert.equal(result.nextJobs[0].type, "Return");
-  assert.equal(result.nextJobs[1].type, "Pickup");
-  assert.equal(result.nextJobs[1].name, "Sam");
+  const alex = result.nextJobs.find((job) => job.name === "Alex");
+  const sam = result.nextJobs.find((job) => job.name === "Sam");
+  assert.equal(alex.salesRep, "Lucia");
+  assert.equal(alex.type, "Return");
+  assert.equal(sam.type, "Pickup");
+  assert.equal(result.nextJobs[0].name, "Old");
+  assert.equal(result.nextJobs[0].overdue, true);
 });
 test("natural whole-dollar formatting with commas", () => {
   assert.equal(dollar(11993), "$11,993");
