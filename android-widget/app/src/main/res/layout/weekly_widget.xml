@@ -3,32 +3,148 @@
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:padding="14dp"
     android:background="@drawable/widget_background">
-  <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
-      android:text="Easy Party Kit · This Week" android:textSize="15sp"
-      android:textColor="#F4DA96" android:textStyle="bold"/>
-  <TextView android:id="@+id/counts" android:layout_width="match_parent" android:layout_height="wrap_content"
-      android:text="Open Easy Party Kit to load this week" android:layout_marginTop="8dp"
-      android:textColor="#FFFFFF" android:textSize="13sp"/>
-  <TextView android:id="@+id/job1" android:layout_width="match_parent" android:layout_height="wrap_content"
-      android:text="" android:layout_marginTop="7dp"
-      android:textColor="#E3EEDF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
-  <TextView android:id="@+id/job2" android:layout_width="match_parent" android:layout_height="wrap_content"
-      android:text="" android:layout_marginTop="3dp"
-      android:textColor="#E3EEDF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
-  <TextView android:id="@+id/job3" android:layout_width="match_parent" android:layout_height="wrap_content"
-      android:text="" android:layout_marginTop="3dp"
-      android:textColor="#E3EEDF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
-  <TextView android:id="@+id/collections" android:layout_width="match_parent" android:layout_height="wrap_content"
-      android:text="Expected collections: —" android:layout_marginTop="10dp"
-      android:textColor="#F4DA96" android:textStyle="bold" android:textSize="15sp"/>
-  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-      android:layout_marginTop="8dp" android:orientation="horizontal" android:gravity="center_vertical">
-    <TextView android:id="@+id/updated" android:layout_width="0dp" android:layout_weight="1"
-        android:layout_height="wrap_content" android:text="Not synchronized"
-        android:textColor="#BBD3C2" android:textSize="10sp"/>
-    <TextView android:id="@+id/new_booking" android:layout_width="wrap_content"
-        android:layout_height="wrap_content" android:text="+ New Booking"
-        android:textColor="#F4DA96" android:textSize="12sp" android:textStyle="bold"
-        android:padding="6dp"/>
+  <LinearLayout android:id="@+id/widget_header" android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="10dp">
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        android:orientation="vertical">
+      <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="Easy Party Kit" android:textSize="19sp" android:textStyle="bold" android:textColor="#FFFFFF"/>
+      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="Weekly operations" android:textColor="#C8DFD0" android:textSize="11sp" android:layout_marginTop="2dp"/>
+    </LinearLayout>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="THIS WEEK"
+        android:textColor="#E7D49B" android:textSize="10sp" android:textStyle="bold" android:paddingStart="8dp"/>
   </LinearLayout>
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:orientation="horizontal" android:baselineAligned="false" android:gravity="center_vertical">
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="64dp"
+        android:layout_marginEnd="5dp" android:layout_marginStart="0dp"
+        android:orientation="vertical" android:gravity="center" android:background="@drawable/widget_stat_card">
+      <TextView android:id="@+id/metric_rentals" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="—" android:textSize="23sp" android:textStyle="bold" android:textColor="#FFFFFF"/>
+      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="Rentals" android:textSize="11sp" android:textColor="#DFEDE2"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="64dp"
+        android:layout_marginEnd="5dp" android:layout_marginStart="5dp"
+        android:orientation="vertical" android:gravity="center" android:background="@drawable/widget_stat_card">
+      <TextView android:id="@+id/metric_deliveries" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="—" android:textSize="23sp" android:textStyle="bold" android:textColor="#FFFFFF"/>
+      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="Deliveries" android:textSize="11sp" android:textColor="#DFEDE2"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="64dp"
+        android:layout_marginEnd="0dp" android:layout_marginStart="5dp"
+        android:orientation="vertical" android:gravity="center" android:background="@drawable/widget_stat_card">
+      <TextView android:id="@+id/metric_returns" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="—" android:textSize="23sp" android:textStyle="bold" android:textColor="#FFFFFF"/>
+      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="Returns" android:textSize="11sp" android:textColor="#DFEDE2"/>
+    </LinearLayout>
+  </LinearLayout>
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="12dp"
+      android:layout_marginBottom="6dp">
+    <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        android:text="NEXT UP" android:textSize="11sp" android:textStyle="bold" android:textColor="#E7D49B"/>
+    <TextView android:id="@+id/overdue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="" android:textSize="10sp" android:textColor="#FBE3A4"/>
+  </LinearLayout>
+  <LinearLayout android:id="@+id/job_card_1" android:layout_width="match_parent" android:layout_height="68dp"
+      android:layout_marginBottom="6dp" android:orientation="horizontal" android:gravity="center_vertical"
+      android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_job_card">
+    <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical"
+        android:gravity="center">
+      <TextView android:id="@+id/job_day_1" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="—" android:textSize="10sp" android:textColor="#CDE3D3" android:textStyle="bold"/>
+      <TextView android:id="@+id/job_date_1" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="—" android:textSize="21sp" android:textColor="#FFFFFF" android:textStyle="bold"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        android:paddingStart="7dp" android:orientation="vertical">
+      <TextView android:id="@+id/job_name_1" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="Upcoming rental" android:textSize="13sp" android:textStyle="bold"
+          android:textColor="#FFFFFF" android:ellipsize="end" android:maxLines="1"/>
+      <TextView android:id="@+id/job_detail_1" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="—" android:textSize="11sp" android:textColor="#DFEDE2"
+          android:ellipsize="end" android:maxLines="1" android:layout_marginTop="2dp"/>
+      <TextView android:id="@+id/job_rep_1" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="" android:textSize="10sp" android:textColor="#CDE3D3"
+          android:ellipsize="end" android:maxLines="1" android:layout_marginTop="2dp"/>
+    </LinearLayout>
+  </LinearLayout>
+  <LinearLayout android:id="@+id/job_card_2" android:layout_width="match_parent" android:layout_height="68dp"
+      android:layout_marginBottom="6dp" android:orientation="horizontal" android:gravity="center_vertical"
+      android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_job_card">
+    <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical"
+        android:gravity="center">
+      <TextView android:id="@+id/job_day_2" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="—" android:textSize="10sp" android:textColor="#CDE3D3" android:textStyle="bold"/>
+      <TextView android:id="@+id/job_date_2" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="—" android:textSize="21sp" android:textColor="#FFFFFF" android:textStyle="bold"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        android:paddingStart="7dp" android:orientation="vertical">
+      <TextView android:id="@+id/job_name_2" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="Upcoming rental" android:textSize="13sp" android:textStyle="bold"
+          android:textColor="#FFFFFF" android:ellipsize="end" android:maxLines="1"/>
+      <TextView android:id="@+id/job_detail_2" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="—" android:textSize="11sp" android:textColor="#DFEDE2"
+          android:ellipsize="end" android:maxLines="1" android:layout_marginTop="2dp"/>
+      <TextView android:id="@+id/job_rep_2" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="" android:textSize="10sp" android:textColor="#CDE3D3"
+          android:ellipsize="end" android:maxLines="1" android:layout_marginTop="2dp"/>
+    </LinearLayout>
+  </LinearLayout>
+  <LinearLayout android:id="@+id/job_card_3" android:layout_width="match_parent" android:layout_height="68dp"
+      android:layout_marginBottom="6dp" android:orientation="horizontal" android:gravity="center_vertical"
+      android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_job_card">
+    <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical"
+        android:gravity="center">
+      <TextView android:id="@+id/job_day_3" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="—" android:textSize="10sp" android:textColor="#CDE3D3" android:textStyle="bold"/>
+      <TextView android:id="@+id/job_date_3" android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="—" android:textSize="21sp" android:textColor="#FFFFFF" android:textStyle="bold"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        android:paddingStart="7dp" android:orientation="vertical">
+      <TextView android:id="@+id/job_name_3" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="Upcoming rental" android:textSize="13sp" android:textStyle="bold"
+          android:textColor="#FFFFFF" android:ellipsize="end" android:maxLines="1"/>
+      <TextView android:id="@+id/job_detail_3" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="—" android:textSize="11sp" android:textColor="#DFEDE2"
+          android:ellipsize="end" android:maxLines="1" android:layout_marginTop="2dp"/>
+      <TextView android:id="@+id/job_rep_3" android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="" android:textSize="10sp" android:textColor="#CDE3D3"
+          android:ellipsize="end" android:maxLines="1" android:layout_marginTop="2dp"/>
+    </LinearLayout>
+  </LinearLayout>
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:orientation="vertical" android:layout_marginTop="5dp" android:padding="12dp"
+      android:background="@drawable/widget_finance_card">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="EXPECTED COLLECTIONS THIS WEEK" android:textSize="10sp"
+        android:textStyle="bold" android:textColor="#446A52"/>
+    <TextView android:id="@+id/collections" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="—" android:layout_marginTop="4dp" android:textSize="28sp"
+        android:textStyle="bold" android:textColor="#214F39"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Outstanding balances · projected" android:layout_marginTop="2dp"
+        android:textSize="10sp" android:textColor="#587866"/>
+  </LinearLayout>
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="10dp">
+    <TextView android:id="@+id/new_booking" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:text="+  New booking"
+        android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold"
+        android:paddingTop="8dp" android:paddingBottom="8dp" android:paddingStart="11dp"
+        android:paddingEnd="11dp" android:background="@drawable/widget_action_background"/>
+    <TextView android:id="@+id/open_calendar" android:layout_width="0dp" android:layout_weight="1"
+        android:layout_height="wrap_content" android:text="Calendar ›"
+        android:gravity="end" android:textColor="#E4EEE7"
+        android:textSize="12sp" android:padding="8dp"/>
+  </LinearLayout>
+  <TextView android:id="@+id/updated" android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:text="Not synchronized" android:textColor="#ADCBB7" android:textSize="9sp"
+      android:layout_marginTop="4dp"/>
 </LinearLayout>
