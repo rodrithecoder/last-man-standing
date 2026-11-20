@@ -100,9 +100,10 @@ test("overdue out rental remains visible and flagged", () => {
     { id: "late", name: "Late", startDate: "2026-11-15", endDate: "2026-11-18",
       status: "out", serviceType: "pickup", totalCost: 100 },
   ], [], new Date(2026,10,20,12));
-  assert.equal(result.nextJobs[0].status, "out");
-  assert.equal(result.nextJobs[0].overdue, true);
-  assert.equal(result.nextJobs[0].type, "Return");
+  assert.equal(result.nextJobs.length, 0);
+  assert.equal(result.outJobs[0].status, "out");
+  assert.equal(result.outJobs[0].overdue, true);
+  assert.equal(result.outJobs[0].type, "Return");
   assert.equal(result.counts.overdue, 1);
 });
 
