@@ -3872,7 +3872,8 @@ export default function App() {
       )}
       <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}>
         <div style={{ flex: "0 0 68px", background: C.bg, borderRight: `1px solid ${C.border}`,
-          display: "flex", alignItems: "center", justifyContent: "center" }}>
+          display: "flex", alignItems: "center", justifyContent: "flex-start",
+          flexDirection: "column", paddingTop: 14, boxSizing: "border-box" }}>
           <button type="button" aria-expanded={desktopFormOpen}
             aria-label={desktopFormOpen ? "Close booking form" : "New booking"} onClick={toggleDesktopForm}
             style={{ width: 54, height: 54, borderRadius: "50%", border: `2px solid ${C.accentDeep}`,
