@@ -2131,8 +2131,8 @@ function BookingsList({
         </div>
       ) : (
         <>
-          {isMobile ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 12, alignItems: "start" }}>
               {filtered.map((b) => {
                 const st = bStatus(b);
                 const isDone = st === ST_DONE;
@@ -2144,6 +2144,7 @@ function BookingsList({
                   border: `1px solid ${isDone ? C.accent : late ? C.danger : st === ST_OUT ? C.warning : C.border}`,
                   borderRadius: 3,
                   padding: "12px 14px",
+                  minWidth: 0,
                   opacity: isDone ? 0.85 : 1,
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -2167,7 +2168,7 @@ function BookingsList({
                         </div>
                       )}
                     </div>
-                    <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       {st !== ST_ACTIVE && (
                         <Btn small variant="ghost" onClick={() => requestStepBack(b)} title={isDone ? "Reopen — back to Out" : "Undo — back to Active"}>
                           ↩ {isDone ? "Reopen" : "Undo"}
@@ -2190,13 +2191,13 @@ function BookingsList({
                     </span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</span>
                   </div>
-                  <div style={{ marginTop: 10, display: "flex", gap: 6 }}>
+                  <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <Btn variant="ghost" onClick={() => requestInvoice(b)} style={{ whiteSpace: "nowrap" }}>
                       🧾 Receipt
                     </Btn>
                   </div>
                   {!isDone && (
-                    <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+                    <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {st === ST_ACTIVE ? (
                         <Btn variant="primary" fullWidth onClick={() => requestMarkOut(b)}>
                           {b.serviceType === "delivery" ? "🚚 Delivered" : "📦 Picked Up by Customer"}
@@ -2217,79 +2218,8 @@ function BookingsList({
                 );
               })}
             </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: T.sans }}>
-                <thead>
-                  <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                    {["Customer", "Sales Rep", "Period", "Days", ...itemDefs.map((it) => it.name), "Service", "Subtotal", "Delivery", "Disc.", "Total", ""].map((h) => (
-                      <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((b, i) => {
-                    const st = bStatus(b);
-                    const isDone = st === ST_DONE;
-                    const isPaid = paidIds.has(b.id);
-                    const late = isOverdue(b);
-                    return (
-                    <tr key={b.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.bg, opacity: isDone ? 0.7 : 1 }}>
-                      <td style={{ padding: "9px 10px", fontWeight: 600, color: C.text }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          {b.name}
-                          <StatusBadge status={st} paid={isPaid} overdue={late} />
-                          {late && <span style={{ fontSize: 10, color: C.danger, fontWeight: 600 }}>{daysOverdue(b)}d</span>}
-                        </div>
-                        {b.notes && <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{b.notes}</div>}
-                      </td>
-                      <td style={{ padding: "9px 10px", color: C.textSub }}>{b.salesRep}</td>
-                      <td style={{ padding: "9px 10px", color: C.textSub, whiteSpace: "nowrap" }}>
-                        {fmtDateShort(b.startDate)} – {fmtDateShort(b.endDate)}
-                        <EtaLine booking={b} size={10} />
-                      </td>
-                      <td style={{ padding: "9px 10px", color: C.textMuted, fontFamily: T.mono, textAlign: "center" }}>{b.days}</td>
-                      {itemDefs.map((it) => (
-                        <td key={it.id} style={{ padding: "9px 10px", color: C.text, fontFamily: T.mono, textAlign: "center" }}>{b.items?.[it.id] || "—"}</td>
-                      ))}
-                      <td style={{ padding: "9px 10px" }}>
-                        <span style={{ fontSize: 10, color: C.textSub, border: `1px solid ${C.border}`, padding: "2px 7px", borderRadius: 2 }}>
-                          {b.serviceType === "delivery" ? "Delivery" : "Pickup"}
-                        </span>
-                        {b.address && <div style={{ marginTop: 3 }}><AddressLink address={b.address} size={10} compact /></div>}
-                      </td>
-                      <td style={{ padding: "9px 10px", color: C.textSub, fontFamily: T.mono }}>${b.itemsTotal?.toFixed(2) || "—"}</td>
-                      <td style={{ padding: "9px 10px", color: C.textSub, fontFamily: T.mono }}>{b.deliveryFee > 0 ? `$${b.deliveryFee.toFixed(2)}` : "—"}</td>
-                      <td style={{ padding: "9px 10px", color: b.discount > 0 ? C.danger : C.textMuted, fontFamily: T.mono }}>{b.discount > 0 ? `-${discountLabel(b)}` : "—"}</td>
-                      <td style={{ padding: "9px 10px", fontWeight: 700, color: C.text, fontFamily: T.mono }}>${b.totalCost.toFixed(2)}</td>
-                      <td style={{ padding: "9px 10px", whiteSpace: "nowrap" }}>
-                        {st === ST_ACTIVE && (
-                          <Btn small variant="primary" onClick={() => requestMarkOut(b)} style={{ marginRight: 4 }}>
-                            {b.serviceType === "delivery" ? "Delivered" : "Picked Up"}
-                          </Btn>
-                        )}
-                        {st === ST_OUT && (
-                          <Btn small variant="primary" onClick={() => requestMarkReturned(b)} style={{ marginRight: 4 }}>✓ Returned</Btn>
-                        )}
-                        {!isDone && !isPaid && (
-                          <Btn small variant="ghost" onClick={() => requestRecordPayment(b)} style={{ marginRight: 4 }}>💵</Btn>
-                        )}
-                        {st !== ST_ACTIVE && (
-                          <Btn small variant="ghost" onClick={() => requestStepBack(b)} style={{ marginRight: 4 }} title={isDone ? "Reopen — back to Out" : "Undo — back to Active"}>
-                            ↩ {isDone ? "Reopen" : "Undo"}
-                          </Btn>
-                        )}
-                        <Btn small variant="ghost" onClick={() => requestInvoice(b)} style={{ marginRight: 4 }} title="Receipt / invoice">🧾</Btn>
-                        <Btn small variant="ghost" onClick={() => startEditBooking(b)}>{isDone ? "Open" : "Edit"}</Btn>
-                        <Btn small variant="ghost" onClick={() => requestRemoveBooking(b)} style={{ color: C.danger }}>Remove</Btn>
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          }
+
 
           <div style={{ marginTop: 14, padding: "12px 14px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3, display: "flex", gap: 28, flexWrap: "wrap", alignItems: "center" }}>
             {[
