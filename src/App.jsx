@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { buildWeeklyWidgetSnapshot } from "./weeklyWidget.js";
 
 // ─── Supabase Client ──────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -3315,6 +3316,23 @@ export default function App() {
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  // Android companion app exposes this bridge only in its trusted WebView.
+  // Browser users are unaffected. Widget refreshes when the app loads or data changes.
+  useEffect(() => {
+    if (loading || loadError || !window.EasyPartyWidget?.update) return;
+    const snapshot = buildWeeklyWidgetSnapshot(bookings, payments);
+    window.EasyPartyWidget.update(JSON.stringify(snapshot));
+  }, [bookings, payments, loading, loadError]);
+
+  useEffect(() => {
+    const action = new URLSearchParams(window.location.search).get("widget");
+    if (action !== "new") return;
+    // Set after mount to open the same booking form when invoked from the widget.
+    if (window.innerWidth < 640) setMobileTab("form");
+    else setDesktopFormOpen(true);
+    window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
   const [mobileTab, setMobileTab] = useState("calendar");
