@@ -43,21 +43,24 @@ export function buildWeeklyWidgetSnapshot(bookings = [], payments = [], now = ne
   const thisWeek = active.filter((b) => isThisWeek(b.startDate));
   const futureJobs = [];
   for (const b of active) {
-    if (b.startDate >= today) futureJobs.push({
+    if ((b.status || "active") === "active" && b.startDate >= today) futureJobs.push({
       id: b.id, date: b.startDate, time: b.etaOut || "",
       ...summarizeRentalItems(b, itemDefs),
       name: b.name || "Rental", salesRep: b.salesRep || "",
       pickupLocation: b.serviceType === "pickup" && ["sergio", "rodri"].includes(b.pickupLocation)
         ? b.pickupLocation : "",
+      status: b.status || "active",
       type: b.serviceType === "delivery" ? "Delivery" : "Pickup",
       order: 0,
     });
-    if (b.endDate >= today) futureJobs.push({
+    if (b.endDate >= today || b.status === "out") futureJobs.push({
       id: b.id, date: b.endDate, time: b.etaBack || "",
       ...summarizeRentalItems(b, itemDefs),
       name: b.name || "Rental", salesRep: b.salesRep || "",
       pickupLocation: b.serviceType === "pickup" && ["sergio", "rodri"].includes(b.pickupLocation)
         ? b.pickupLocation : "",
+      status: b.status || "active",
+      overdue: b.status === "out" && b.endDate < today,
       type: "Return", order: 1,
     });
   }
