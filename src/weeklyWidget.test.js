@@ -59,3 +59,19 @@ test("rental item summary keeps quantities, first two names, and remaining count
   assert.equal(result.nextJobs[0].moreCount, 1);
   assert.deepEqual(summarizeRentalItems({ items: {} }, inventory), { items: [], moreCount: 0 });
 });
+
+test("pickup location appears in pickup and return jobs, not deliveries", () => {
+  const bookings = [
+    { id: "p1", name: "Pickup", startDate: "2026-11-20", endDate: "2026-11-21",
+      pickupLocation: "sergio", serviceType: "pickup", status: "active", totalCost: 100 },
+    { id: "d1", name: "Delivery", startDate: "2026-11-20", endDate: "2026-11-22",
+      pickupLocation: "rodri", serviceType: "delivery", status: "active", totalCost: 50 },
+  ];
+  const result = buildWeeklyWidgetSnapshot(bookings, [], new Date(2026, 10, 20, 12));
+  const pickup = result.nextJobs.find((j) => j.name === "Pickup" && j.type === "Pickup");
+  const delivery = result.nextJobs.find((j) => j.name === "Delivery");
+  const returned = result.nextJobs.find((j) => j.name === "Pickup" && j.type === "Return");
+  assert.equal(pickup.pickupLocation, "sergio");
+  assert.equal(delivery.pickupLocation, "");
+  assert.equal(returned.pickupLocation, "sergio");
+});
