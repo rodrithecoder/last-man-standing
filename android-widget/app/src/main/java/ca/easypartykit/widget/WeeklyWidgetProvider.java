@@ -22,6 +22,9 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
     private static final int[] NAMES = {R.id.job_name_1, R.id.job_name_2, R.id.job_name_3};
     private static final int[] DETAILS = {R.id.job_detail_1, R.id.job_detail_2, R.id.job_detail_3};
     private static final int[] REPS = {R.id.job_rep_1, R.id.job_rep_2, R.id.job_rep_3};
+    private static final int[] ITEM_BOXES = {R.id.job_items_container_1, R.id.job_items_container_2, R.id.job_items_container_3};
+    private static final int[] ITEM_NAMES = {R.id.job_items_1, R.id.job_items_2, R.id.job_items_3};
+    private static final int[] ITEM_MORE = {R.id.job_more_1, R.id.job_more_2, R.id.job_more_3};
 
     @Override public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
         for (int id : ids) render(context, manager, id);
@@ -72,6 +75,20 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
                         views.setTextViewText(DETAILS[i], type + (time.isEmpty() ? "" : " · " + time));
                         String rep = job.optString("salesRep", "").trim();
                         views.setTextViewText(REPS[i], rep.isEmpty() ? "" : "Sales rep: " + rep);
+                        JSONArray rentalItems = job.optJSONArray("items");
+                        int nItems = rentalItems == null ? 0 : rentalItems.length();
+                        int remaining = job.optInt("moreCount", 0);
+                        views.setViewVisibility(ITEM_BOXES[i],
+                            nItems == 0 && remaining == 0 ? View.GONE : View.VISIBLE);
+                        StringBuilder itemLabel = new StringBuilder();
+                        if (rentalItems != null) {
+                            for (int itemIndex = 0; itemIndex < Math.min(2, nItems); itemIndex++) {
+                                if (itemIndex > 0) itemLabel.append("\\n");
+                                itemLabel.append(rentalItems.optString(itemIndex, ""));
+                            }
+                        }
+                        views.setTextViewText(ITEM_NAMES[i], itemLabel.toString());
+                        views.setTextViewText(ITEM_MORE[i], remaining > 0 ? "+" + remaining + " more" : "");
                     }
                     if (total == 0) showEmptyJob(views, "No upcoming rentals");
                     String timestamp = snapshot.optString("generatedAt", "");
@@ -93,7 +110,12 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(R.id.metric_returns, "—");
         views.setTextViewText(R.id.overdue, "");
         views.setTextViewText(R.id.collections, "—");
-        for (int card : CARDS) views.setViewVisibility(card, View.GONE);
+        for (int i = 0; i < CARDS.length; i++) {
+            views.setViewVisibility(CARDS[i], View.GONE);
+            views.setViewVisibility(ITEM_BOXES[i], View.GONE);
+            views.setTextViewText(ITEM_NAMES[i], "");
+            views.setTextViewText(ITEM_MORE[i], "");
+        }
     }
 
     private static void showEmpty(RemoteViews views, String description, String updated) {
@@ -108,6 +130,7 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(NAMES[0], description);
         views.setTextViewText(DETAILS[0], "");
         views.setTextViewText(REPS[0], "");
+        views.setViewVisibility(ITEM_BOXES[0], View.GONE);
     }
 
     private static PendingIntent openIntent(Context context, boolean isNew, int requestCode) {
