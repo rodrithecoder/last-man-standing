@@ -82,8 +82,11 @@ export function buildWeeklyWidgetSnapshot(bookings = [], payments = [], now = ne
     a.date.localeCompare(b.date) ||
     String(a.time).localeCompare(String(b.time))
   );
-  const outstanding = thisWeek.reduce((sum, b) =>
-    sum + Math.max(0, (Number(b.totalCost) || 0) - (paymentsByBooking.get(b.id) || 0)), 0
+  // Booked revenue for Monday–Sunday: full booking value, regardless of deposits,
+  // payment status, or whether equipment has already been returned.
+  const periodBookings = bookings.filter((b) => isThisWeek(b.startDate));
+  const totalRevenue = periodBookings.reduce(
+    (sum, b) => sum + (Number(b.totalCost) || 0), 0
   );
   return {
     schemaVersion: 1,
@@ -94,8 +97,8 @@ export function buildWeeklyWidgetSnapshot(bookings = [], payments = [], now = ne
       returns: active.filter((b) => isThisWeek(b.endDate)).length,
       overdue: active.filter((b) => b.status === "out" && b.endDate < today).length,
     },
-    expectedCollections: outstanding,
-    expectedCollectionsLabel: dollar(outstanding),
+    totalRevenue,
+    totalRevenueLabel: dollar(totalRevenue),
     // Restrict customer details to upcoming jobs; widget stores only 3 rows.
     nextJobs: futureJobs.filter((job) => job.status !== "out").slice(0, 3),
     outCount: outJobs.length,
