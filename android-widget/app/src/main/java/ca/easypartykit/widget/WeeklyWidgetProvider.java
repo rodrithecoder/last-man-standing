@@ -22,6 +22,7 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
     private static final int[] NAMES = {R.id.job_name_1, R.id.job_name_2, R.id.job_name_3};
     private static final int[] DETAILS = {R.id.job_detail_1, R.id.job_detail_2, R.id.job_detail_3};
     private static final int[] REPS = {R.id.job_rep_1, R.id.job_rep_2, R.id.job_rep_3};
+    private static final int[] PICKUPS = {R.id.job_pickup_1, R.id.job_pickup_2, R.id.job_pickup_3};
     private static final int[] ITEM_BOXES = {R.id.job_items_container_1, R.id.job_items_container_2, R.id.job_items_container_3};
     private static final int[] ITEM_NAMES = {R.id.job_items_1, R.id.job_items_2, R.id.job_items_3};
     private static final int[] ITEM_MORE = {R.id.job_more_1, R.id.job_more_2, R.id.job_more_3};
@@ -75,6 +76,14 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
                         views.setTextViewText(DETAILS[i], type + (time.isEmpty() ? "" : " · " + time));
                         String rep = job.optString("salesRep", "").trim();
                         views.setTextViewText(REPS[i], rep.isEmpty() ? "" : "Sales rep: " + rep);
+                        String location = job.optString("pickupLocation", "");
+                        String locationName = "sergio".equals(location) ? "Sergio" :
+                            "rodri".equals(location) ? "Rodri" : "";
+                        String locationLabel = locationName.isEmpty() ? "" :
+                            ("Return".equals(type) ? "Return to " : "Pickup at ") + locationName;
+                        views.setTextViewText(PICKUPS[i], locationLabel);
+                        views.setViewVisibility(PICKUPS[i],
+                            locationLabel.isEmpty() ? View.GONE : View.VISIBLE);
                         JSONArray rentalItems = job.optJSONArray("items");
                         int nItems = rentalItems == null ? 0 : rentalItems.length();
                         int remaining = job.optInt("moreCount", 0);
@@ -115,6 +124,8 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
             views.setViewVisibility(ITEM_BOXES[i], View.GONE);
             views.setTextViewText(ITEM_NAMES[i], "");
             views.setTextViewText(ITEM_MORE[i], "");
+            views.setTextViewText(PICKUPS[i], "");
+            views.setViewVisibility(PICKUPS[i], View.GONE);
         }
     }
 
@@ -130,6 +141,8 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(NAMES[0], description);
         views.setTextViewText(DETAILS[0], "");
         views.setTextViewText(REPS[0], "");
+        views.setTextViewText(PICKUPS[0], "");
+        views.setViewVisibility(PICKUPS[0], View.GONE);
         views.setViewVisibility(ITEM_BOXES[0], View.GONE);
     }
 
