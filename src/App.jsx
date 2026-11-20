@@ -1393,7 +1393,7 @@ function BookingForm({
           )}
           {preview.discountAmount > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: T.sans, color: C.danger, marginBottom: 4 }}>
-              <span>Discount ({form.discountMode === "amt" ? `$${form.discount}` : `${form.discount}%`})</span>
+              <span>Discount ({form.discountMode === "amt" ? formatMoney(form.discount) : `${form.discount}%`})</span>
               <span style={{ fontFamily: T.mono }}>-${preview.discountAmount.toLocaleString("en-CA", { maximumFractionDigits: 0, minimumFractionDigits: 0 })}</span>
             </div>
           )}
