@@ -95,7 +95,7 @@ public final class WeeklyWidgetProvider extends AppWidgetProvider {
                     int overdue = counts.optInt("overdue");
                     views.setTextViewText(R.id.overdue, overdue > 0 ? overdue + " overdue" : "");
                     views.setTextViewText(R.id.collections,
-                        snapshot.optString("expectedCollectionsLabel", "—"));
+                        snapshot.optString("totalRevenueLabel", "—"));
 
                     int outCount = snapshot.optInt("outCount", 0);
                     views.setTextViewText(R.id.tab_out, "OUT" + (outCount > 0 ? " (" + outCount + ")" : ""));
