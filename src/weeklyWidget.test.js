@@ -10,7 +10,7 @@ test("Monday–Sunday boundaries remain local and cross months", () => {
     start: "2026-11-30", end: "2026-12-06", today: "2026-12-01",
   });
 });
-test("weekly snapshot accounts for partial payments and overdue returns", () => {
+test("weekly snapshot retains operations status while revenue ignores deposits and completed status", () => {
   const bookings = [
     { id: "1", name: "Alex", startDate: "2026-11-17", endDate: "2026-11-20",
       serviceType: "delivery", salesRep: "Lucia", totalCost: 1250.75, status: "active" },
@@ -25,8 +25,8 @@ test("weekly snapshot accounts for partial payments and overdue returns", () => 
     { bookingId: "2", amount: 100 }];
   const result = buildWeeklyWidgetSnapshot(bookings, payments, new Date(2026, 10, 19, 12));
   assert.deepEqual(result.counts, { rentals: 2, deliveries: 1, returns: 1, overdue: 1 });
-  assert.equal(result.expectedCollections, 1000.5);
-  assert.equal(result.expectedCollectionsLabel, "$1,001");
+  assert.equal(result.totalRevenue, 2350.74);
+  assert.equal(result.totalRevenueLabel, "$2,351");
   const alex = result.nextJobs.find((job) => job.name === "Alex");
   const sam = result.nextJobs.find((job) => job.name === "Sam");
   assert.equal(alex.salesRep, "Lucia");
@@ -87,8 +87,8 @@ test("rental marked out appears as an out return, not a pending pickup", () => {
       serviceType: "delivery", status: "active", totalCost: 100 },
   ];
   const result = buildWeeklyWidgetSnapshot(bookings, [], new Date(2026,10,20,12));
-  const job = result.nextJobs.find((j) => j.name === "Sergio pickup");
-  assert.equal(result.nextJobs.filter((j) => j.name === "Sergio pickup").length, 1);
+  const job = result.outJobs.find((j) => j.name === "Sergio pickup");
+  assert.equal(result.nextJobs.filter((j) => j.name === "Sergio pickup").length, 0);
   assert.equal(job.type, "Return");
   assert.equal(job.status, "out");
   assert.equal(job.pickupLocation, "sergio");
@@ -124,4 +124,17 @@ test("Upcoming excludes Out while the Out tab lists active outstanding equipment
   assert.equal(result.outJobs[1].pickupLocation,"sergio");
   assert.equal(result.nextJobs.some(j=>j.status==="out"),false);
   assert.equal(result.nextJobs[0].name,"Pending");
+});
+
+test("total revenue includes full booking amounts, including completed and paid bookings", () => {
+  const bookings = [
+    {id:"a",startDate:"2026-11-16",endDate:"2026-11-17",totalCost:399,status:"done"},
+    {id:"b",startDate:"2026-11-20",endDate:"2026-11-22",totalCost:500,status:"out"},
+    {id:"c",startDate:"2026-11-22",endDate:"2026-11-23",totalCost:250.50,status:"active"},
+    {id:"outside",startDate:"2026-11-23",endDate:"2026-11-24",totalCost:999,status:"active"},
+  ];
+  const payments=[{bookingId:"a",amount:399},{bookingId:"b",amount:100}];
+  const result=buildWeeklyWidgetSnapshot(bookings,payments,new Date(2026,10,20,12));
+  assert.equal(result.totalRevenue,1149.5);
+  assert.equal(result.totalRevenueLabel,"$1,150");
 });
