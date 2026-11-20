@@ -9,7 +9,7 @@ android {
         versionCode 1
         versionName '0.1.0'
         // This URL must point to a deployment containing the snapshot bridge.
-        buildConfigField 'String', 'APP_URL', '"https://last-man-standing-hazel.vercel.app/"'
+        buildConfigField 'String', 'APP_URL', '"https://last-man-standing-git-fea-23b819-rodrigoguzmanbg-6872s-projects.vercel.app/"'
     }
     buildTypes { release { minifyEnabled false } }
     compileOptions {
