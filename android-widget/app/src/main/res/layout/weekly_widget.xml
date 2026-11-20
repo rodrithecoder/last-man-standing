@@ -50,7 +50,7 @@
     <TextView android:id="@+id/overdue" android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="" android:textSize="10sp" android:textColor="#FBE3A4"/>
   </LinearLayout>
-  <LinearLayout android:id="@+id/job_card_1" android:layout_width="match_parent" android:layout_height="68dp"
+  <LinearLayout android:id="@+id/job_card_1" android:layout_width="match_parent" android:layout_height="78dp"
       android:layout_marginBottom="6dp" android:orientation="horizontal" android:gravity="center_vertical"
       android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_job_card">
     <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical"
@@ -72,8 +72,23 @@
           android:text="" android:textSize="10sp" android:textColor="#CDE3D3"
           android:ellipsize="end" android:maxLines="1" android:layout_marginTop="2dp"/>
     </LinearLayout>
+    <LinearLayout android:id="@+id/job_items_container_1"
+        android:layout_width="116dp" android:layout_height="wrap_content"
+        android:layout_marginStart="7dp" android:orientation="vertical"
+        android:gravity="center_vertical" android:paddingStart="9dp">
+      <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="ITEMS" android:textColor="#D3E8DA" android:textStyle="bold"
+          android:textSize="9sp"/>
+      <TextView android:id="@+id/job_items_1" android:layout_width="match_parent"
+          android:layout_height="wrap_content" android:layout_marginTop="3dp"
+          android:text="" android:textSize="10sp" android:textColor="#FFFFFF"
+          android:maxLines="2" android:ellipsize="end"/>
+      <TextView android:id="@+id/job_more_1" android:layout_width="match_parent"
+          android:layout_height="wrap_content" android:layout_marginTop="1dp"
+          android:text="" android:textSize="10sp" android:textColor="#D5E6D8"/>
+    </LinearLayout>
   </LinearLayout>
-  <LinearLayout android:id="@+id/job_card_2" android:layout_width="match_parent" android:layout_height="68dp"
+  <LinearLayout android:id="@+id/job_card_2" android:layout_width="match_parent" android:layout_height="78dp"
       android:layout_marginBottom="6dp" android:orientation="horizontal" android:gravity="center_vertical"
       android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_job_card">
     <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical"
@@ -95,8 +110,23 @@
           android:text="" android:textSize="10sp" android:textColor="#CDE3D3"
           android:ellipsize="end" android:maxLines="1" android:layout_marginTop="2dp"/>
     </LinearLayout>
+    <LinearLayout android:id="@+id/job_items_container_2"
+        android:layout_width="116dp" android:layout_height="wrap_content"
+        android:layout_marginStart="7dp" android:orientation="vertical"
+        android:gravity="center_vertical" android:paddingStart="9dp">
+      <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="ITEMS" android:textColor="#D3E8DA" android:textStyle="bold"
+          android:textSize="9sp"/>
+      <TextView android:id="@+id/job_items_2" android:layout_width="match_parent"
+          android:layout_height="wrap_content" android:layout_marginTop="3dp"
+          android:text="" android:textSize="10sp" android:textColor="#FFFFFF"
+          android:maxLines="2" android:ellipsize="end"/>
+      <TextView android:id="@+id/job_more_2" android:layout_width="match_parent"
+          android:layout_height="wrap_content" android:layout_marginTop="1dp"
+          android:text="" android:textSize="10sp" android:textColor="#D5E6D8"/>
+    </LinearLayout>
   </LinearLayout>
-  <LinearLayout android:id="@+id/job_card_3" android:layout_width="match_parent" android:layout_height="68dp"
+  <LinearLayout android:id="@+id/job_card_3" android:layout_width="match_parent" android:layout_height="78dp"
       android:layout_marginBottom="6dp" android:orientation="horizontal" android:gravity="center_vertical"
       android:paddingStart="12dp" android:paddingEnd="12dp" android:background="@drawable/widget_job_card">
     <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical"
@@ -117,6 +147,21 @@
       <TextView android:id="@+id/job_rep_3" android:layout_width="match_parent" android:layout_height="wrap_content"
           android:text="" android:textSize="10sp" android:textColor="#CDE3D3"
           android:ellipsize="end" android:maxLines="1" android:layout_marginTop="2dp"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/job_items_container_3"
+        android:layout_width="116dp" android:layout_height="wrap_content"
+        android:layout_marginStart="7dp" android:orientation="vertical"
+        android:gravity="center_vertical" android:paddingStart="9dp">
+      <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:text="ITEMS" android:textColor="#D3E8DA" android:textStyle="bold"
+          android:textSize="9sp"/>
+      <TextView android:id="@+id/job_items_3" android:layout_width="match_parent"
+          android:layout_height="wrap_content" android:layout_marginTop="3dp"
+          android:text="" android:textSize="10sp" android:textColor="#FFFFFF"
+          android:maxLines="2" android:ellipsize="end"/>
+      <TextView android:id="@+id/job_more_3" android:layout_width="match_parent"
+          android:layout_height="wrap_content" android:layout_marginTop="1dp"
+          android:text="" android:textSize="10sp" android:textColor="#D5E6D8"/>
     </LinearLayout>
   </LinearLayout>
   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
