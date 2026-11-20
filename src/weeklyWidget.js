@@ -16,7 +16,23 @@ export const dollar = (number) => "$" + new Intl.NumberFormat("en-CA", {
   maximumFractionDigits: 0, minimumFractionDigits: 0,
 }).format(Number(number) || 0);
 
-export function buildWeeklyWidgetSnapshot(bookings = [], payments = [], now = new Date()) {
+// Match booking.items (item ID → quantity) to the current inventory names.
+export function summarizeRentalItems(booking, itemDefs = []) {
+  const quantities = booking?.items || {};
+  const namesById = new Map(itemDefs.map((it) => [String(it.id), it.name]));
+  const selected = Object.entries(quantities)
+    .filter(([, quantity]) => Number(quantity) > 0)
+    .map(([id, quantity]) => ({
+      name: String(namesById.get(String(id)) || "Item").trim() || "Item",
+      quantity: Number(quantity),
+    }));
+  return {
+    items: selected.slice(0, 2).map(({ name, quantity }) => `${quantity}× ${name}`),
+    moreCount: Math.max(0, selected.length - 2),
+  };
+}
+
+export function buildWeeklyWidgetSnapshot(bookings = [], payments = [], now = new Date(), itemDefs = []) {
   const { start, end, today } = mondayToSunday(now);
   const paymentsByBooking = new Map();
   for (const p of payments) {
@@ -29,11 +45,13 @@ export function buildWeeklyWidgetSnapshot(bookings = [], payments = [], now = ne
   for (const b of active) {
     if (b.startDate >= today) futureJobs.push({
       id: b.id, date: b.startDate, time: b.etaOut || "",
+      ...summarizeRentalItems(b, itemDefs),
       name: b.name || "Rental", salesRep: b.salesRep || "", type: b.serviceType === "delivery" ? "Delivery" : "Pickup",
       order: 0,
     });
     if (b.endDate >= today) futureJobs.push({
       id: b.id, date: b.endDate, time: b.etaBack || "",
+      ...summarizeRentalItems(b, itemDefs),
       name: b.name || "Rental", salesRep: b.salesRep || "", type: "Return", order: 1,
     });
   }
