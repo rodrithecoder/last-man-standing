@@ -3047,9 +3047,33 @@ function TabBar({ active, onChange, tabs, bottom }) {
     }}>
       {tabs.map((t) => (
         <button key={t.id} onClick={() => onChange(t.id)}
-          style={{ flex: 1, padding: bottom ? "10px 0 8px" : "9px 16px", border: "none", background: "none", cursor: "pointer", fontFamily: T.sans, fontSize: 12, color: active === t.id ? C.accent : C.textMuted, fontWeight: active === t.id ? 700 : 500, borderBottom: !bottom && active === t.id ? `2px solid ${C.accent}` : "2px solid transparent", transition: "all 0.15s", display: "flex", flexDirection: bottom ? "column" : "row", alignItems: "center", gap: 3 }}>
-          {bottom && <span style={{ fontSize: 18 }}>{t.icon}</span>}
-          <span style={{ fontSize: bottom ? 10 : 12, letterSpacing: bottom ? "0.04em" : 0, textTransform: bottom ? "uppercase" : "none" }}>{t.label}</span>
+          aria-label={t.id === "form" ? (t.label === "Edit" ? "Edit booking" : "New booking") : t.label}
+          style={{
+            flex: 1, minWidth: 0,
+            padding: bottom ? "7px 0 6px" : "9px 16px",
+            border: "none", background: "none", cursor: "pointer",
+            fontFamily: T.sans, fontSize: 12,
+            color: active === t.id ? C.accent : C.textMuted,
+            fontWeight: active === t.id ? 700 : 500,
+            borderBottom: !bottom && active === t.id ? `2px solid ${C.accent}` : "2px solid transparent",
+            transition: "all 0.15s", display: "flex",
+            flexDirection: bottom ? "column" : "row", alignItems: "center", justifyContent: "center", gap: 3,
+          }}>
+          {bottom && t.id === "form" ? (
+            <span style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: C.accent, border: `2px solid ${C.accentDeep}`,
+              boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#fff", boxShadow: "0 2px 7px rgba(0,0,0,.19)",
+              fontSize: 25, fontWeight: 600, lineHeight: 1,
+            }} aria-hidden="true">{t.icon}</span>
+          ) : bottom ? <span style={{ fontSize: 18 }}>{t.icon}</span> : null}
+          <span style={{
+            fontSize: bottom ? 10 : 12, letterSpacing: bottom ? "0.04em" : 0,
+            textTransform: bottom ? "uppercase" : "none",
+            color: bottom && t.id === "form" ? C.accentDeep : undefined,
+            fontWeight: bottom && t.id === "form" ? 700 : undefined,
+          }}>{t.label}</span>
         </button>
       ))}
     </div>
